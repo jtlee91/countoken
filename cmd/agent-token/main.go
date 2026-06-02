@@ -68,6 +68,7 @@ func runInspect(args []string, stdout io.Writer) error {
 	codexSessions := flags.String("codex-sessions", defaultCodexSessionsDir(), "Codex sessions directory")
 	claudeProjects := flags.String("claude-projects", defaultClaudeProjectsDir(), "Claude projects directory")
 	stateDir := flags.String("state-dir", defaultStateDir(), "local state directory")
+	quiet := flags.Bool("quiet", false, "suppress JSON output")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -98,6 +99,9 @@ func runInspect(args []string, stdout io.Writer) error {
 		result = claudeResult
 	default:
 		return fmt.Errorf("unsupported provider %q: expected codex or claude", *provider)
+	}
+	if *quiet {
+		return nil
 	}
 	return writeInspectResult(stdout, result)
 }

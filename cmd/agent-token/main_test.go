@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -153,6 +154,44 @@ func TestRunInspectDefaultsToAllProviders(t *testing.T) {
 	}
 	if providers["codex"] != 1 || providers["claude"] != 1 {
 		t.Fatalf("session providers = %#v, want one codex and one claude", providers)
+	}
+}
+
+func TestRunInspectQuietSuppressesOutputAndStoresState(t *testing.T) {
+	sessionsDir := t.TempDir()
+	copyFile(t, filepath.Join("..", "..", "testdata", "codex", "session.jsonl"), filepath.Join(sessionsDir, "session.jsonl"))
+	stateDir := t.TempDir()
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"inspect",
+		"--provider",
+		"codex",
+		"--codex-sessions",
+		sessionsDir,
+		"--state-dir",
+		stateDir,
+		"--quiet",
+	}, &stdout)
+	if err != nil {
+		t.Fatalf("run(inspect --quiet) error = %v", err)
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("quiet stdout = %q, want empty", stdout.String())
+	}
+
+	db, err := sql.Open("sqlite", filepath.Join(stateDir, "usage.sqlite"))
+	if err != nil {
+		t.Fatalf("sql.Open(sqlite state) error = %v", err)
+	}
+	defer db.Close()
+
+	var sessionCount int
+	if err := db.QueryRow(`select count(*) from sessions where provider = 'codex'`).Scan(&sessionCount); err != nil {
+		t.Fatalf("select sessions count error = %v", err)
+	}
+	if sessionCount != 1 {
+		t.Fatalf("codex session count = %d, want 1", sessionCount)
 	}
 }
 

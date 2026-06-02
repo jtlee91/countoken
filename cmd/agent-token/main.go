@@ -78,15 +78,17 @@ func main() {
 
 func run(args []string, stdout io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("expected command: inspect")
+		return errors.New("expected command: inspect, login, or sync")
 	}
 	switch args[0] {
 	case "inspect":
 		return runInspect(args[1:], stdout)
+	case "login":
+		return runLogin(args[1:], stdout)
 	case "sync":
 		return runSync(args[1:], stdout)
 	default:
-		return errors.New("expected command: inspect or sync")
+		return errors.New("expected command: inspect, login, or sync")
 	}
 }
 
@@ -135,6 +137,47 @@ func runInspect(args []string, stdout io.Writer) error {
 	return writeInspectResult(stdout, result)
 }
 
+func runLogin(args []string, stdout io.Writer) error {
+	flags := flag.NewFlagSet("login", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	stateDir := flags.String("state-dir", defaultStateDir(), "local state directory")
+	supabaseURL := flags.String("supabase-url", getenvDefault("TOKEN_AGENT_SUPABASE_URL", defaultSupabaseURL), "Supabase project URL")
+	anonKey := flags.String("anon-key", getenvDefault("TOKEN_AGENT_SUPABASE_ANON_KEY", defaultAnonKey), "Supabase anon key")
+	syncEndpoint := flags.String("sync-endpoint", getenvDefault("TOKEN_AGENT_SYNC_ENDPOINT", defaultSyncEndpoint), "sync endpoint URL")
+	email := flags.String("email", os.Getenv("TOKEN_AGENT_EMAIL"), "Supabase Auth email")
+	password := flags.String("password", "", "Supabase Auth password")
+	passwordEnv := flags.String("password-env", "TOKEN_AGENT_PASSWORD", "environment variable containing the Supabase Auth password")
+	quiet := flags.Bool("quiet", false, "suppress JSON output")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *email == "" {
+		return errors.New("login requires --email")
+	}
+	resolvedPassword, err := passwordFromOptions(*password, *passwordEnv)
+	if err != nil {
+		return err
+	}
+
+	token, err := passwordLogin(context.Background(), *supabaseURL, *anonKey, *email, resolvedPassword)
+	if err != nil {
+		return err
+	}
+	auth := authFromTokenResponse(*supabaseURL, *anonKey, *syncEndpoint, token)
+	if err := saveAuthState(authPath(*stateDir), auth); err != nil {
+		return err
+	}
+	if *quiet {
+		return nil
+	}
+	encoder := json.NewEncoder(stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(map[string]any{
+		"logged_in": true,
+		"user_id":   auth.UserID,
+	})
+}
+
 func runSync(args []string, stdout io.Writer) error {
 	flags := flag.NewFlagSet("sync", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
@@ -145,8 +188,20 @@ func runSync(args []string, stdout io.Writer) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if *endpoint == "" {
-		return errors.New("sync requires --endpoint")
+	resolvedEndpoint := *endpoint
+	resolvedToken := *token
+	if resolvedToken == "" {
+		auth, err := ensureFreshAuth(context.Background(), authPath(*stateDir), 5*time.Minute)
+		if err != nil {
+			return fmt.Errorf("sync requires --token or login: %w", err)
+		}
+		resolvedToken = auth.AccessToken
+		if resolvedEndpoint == "" {
+			resolvedEndpoint = auth.SyncEndpoint
+		}
+	}
+	if resolvedEndpoint == "" {
+		resolvedEndpoint = defaultSyncEndpoint
 	}
 
 	store, err := state.Open(filepath.Join(*stateDir, "usage.sqlite"))
@@ -160,7 +215,7 @@ func runSync(args []string, stdout io.Writer) error {
 		return err
 	}
 	payload := buildSyncPayload(sessions)
-	if err := postSyncPayload(context.Background(), *endpoint, *token, payload); err != nil {
+	if err := postSyncPayload(context.Background(), resolvedEndpoint, resolvedToken, payload); err != nil {
 		return err
 	}
 
@@ -173,6 +228,14 @@ func runSync(args []string, stdout io.Writer) error {
 	encoder := json.NewEncoder(stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(result)
+}
+
+func getenvDefault(name string, fallback string) string {
+	value := os.Getenv(name)
+	if value != "" {
+		return value
+	}
+	return fallback
 }
 
 func buildSyncPayload(sessions []state.SessionRow) syncPayload {

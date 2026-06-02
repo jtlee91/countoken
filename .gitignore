@@ -1,0 +1,8 @@
+.DS_Store
+dist/
+sessions-ubuntu/
+sessions.zip
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+coverage.out

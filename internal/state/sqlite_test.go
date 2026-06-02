@@ -17,7 +17,7 @@ func TestUpsertSourceFileStoresAuditTimestampsInKST(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	if err := store.UpsertSourceFile(context.Background(), "file-key", 123, "2026-06-02T16:30:00+09:00", codex.SessionSummary{
+	if err := store.UpsertSourceFile(context.Background(), "codex", "file-key", 123, "2026-06-02T16:30:00+09:00", codex.SessionSummary{
 		SessionHash:   "session-hash",
 		StartedAt:     "2026-06-02T16:00:00+09:00",
 		EndedAt:       "2026-06-02T16:10:00+09:00",
@@ -66,7 +66,7 @@ func TestOpenNormalizesExistingTimestampsToKST(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open() error = %v", err)
 	}
-	if err := store.UpsertSourceFile(context.Background(), "file-key", 123, "2026-06-02T07:30:00Z", codex.SessionSummary{
+	if err := store.UpsertSourceFile(context.Background(), "codex", "file-key", 123, "2026-06-02T07:30:00Z", codex.SessionSummary{
 		SessionHash:   "session-hash",
 		StartedAt:     "2026-06-02T07:00:00Z",
 		EndedAt:       "2026-06-02T07:10:00Z",

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jtlee/local-agent-usage/internal/codex"
+	"github.com/jtlee/local-agent-usage/internal/usage"
 	_ "modernc.org/sqlite"
 )
 
@@ -20,7 +20,7 @@ var kst = time.FixedZone("KST", 9*60*60)
 type SourceFile struct {
 	SizeBytes  int64
 	ModifiedAt string
-	Session    codex.SessionSummary
+	Session    usage.SessionSummary
 }
 
 func Open(path string) (*Store, error) {
@@ -49,7 +49,7 @@ func (store *Store) Close() error {
 	return store.db.Close()
 }
 
-func (store *Store) SourceFile(ctx context.Context, fileKey string) (SourceFile, bool, error) {
+func (store *Store) SourceFile(ctx context.Context, provider string, fileKey string) (SourceFile, bool, error) {
 	row := store.db.QueryRowContext(ctx, `
 		select
 			sf.size_bytes,
@@ -66,11 +66,11 @@ func (store *Store) SourceFile(ctx context.Context, fileKey string) (SourceFile,
 			s.total_tokens
 		from source_files sf
 		join sessions s on s.session_hash = sf.session_hash
-		where sf.file_key = ? and sf.provider = 'codex'
-	`, fileKey)
+		where sf.file_key = ? and sf.provider = ?
+	`, fileKey, provider)
 
 	var source SourceFile
-	var session codex.SessionSummary
+	var session usage.SessionSummary
 	err := row.Scan(
 		&source.SizeBytes,
 		&source.ModifiedAt,
@@ -95,7 +95,7 @@ func (store *Store) SourceFile(ctx context.Context, fileKey string) (SourceFile,
 	return source, true, nil
 }
 
-func (store *Store) UpsertSourceFile(ctx context.Context, fileKey string, sizeBytes int64, modifiedAt string, session codex.SessionSummary) error {
+func (store *Store) UpsertSourceFile(ctx context.Context, provider string, fileKey string, sizeBytes int64, modifiedAt string, session usage.SessionSummary) error {
 	now := time.Now().In(kst).Format(time.RFC3339Nano)
 	tx, err := store.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -117,8 +117,9 @@ func (store *Store) UpsertSourceFile(ctx context.Context, fileKey string, sizeBy
 			reasoning_tokens,
 			total_tokens,
 			updated_at
-		) values (?, 'codex', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		on conflict(session_hash) do update set
+			provider = excluded.provider,
 			started_at = excluded.started_at,
 			ended_at = excluded.ended_at,
 			user_turn_count = excluded.user_turn_count,
@@ -129,7 +130,7 @@ func (store *Store) UpsertSourceFile(ctx context.Context, fileKey string, sizeBy
 			reasoning_tokens = excluded.reasoning_tokens,
 			total_tokens = excluded.total_tokens,
 			updated_at = excluded.updated_at
-	`, session.SessionHash, session.StartedAt, session.EndedAt, session.UserTurnCount, session.LLMCallCount, session.Tokens.Input, session.Tokens.Output, session.Tokens.Cache, session.Tokens.Reasoning, session.Tokens.Total, now); err != nil {
+	`, session.SessionHash, provider, session.StartedAt, session.EndedAt, session.UserTurnCount, session.LLMCallCount, session.Tokens.Input, session.Tokens.Output, session.Tokens.Cache, session.Tokens.Reasoning, session.Tokens.Total, now); err != nil {
 		return err
 	}
 
@@ -141,21 +142,22 @@ func (store *Store) UpsertSourceFile(ctx context.Context, fileKey string, sizeBy
 			modified_at,
 			session_hash,
 			last_parsed_at
-		) values (?, 'codex', ?, ?, ?, ?)
+		) values (?, ?, ?, ?, ?, ?)
 		on conflict(file_key) do update set
+			provider = excluded.provider,
 			size_bytes = excluded.size_bytes,
 			modified_at = excluded.modified_at,
 			session_hash = excluded.session_hash,
 			last_parsed_at = excluded.last_parsed_at
-	`, fileKey, sizeBytes, modifiedAt, session.SessionHash, now); err != nil {
+	`, fileKey, provider, sizeBytes, modifiedAt, session.SessionHash, now); err != nil {
 		return err
 	}
 
 	return tx.Commit()
 }
 
-func (store *Store) DeleteSourceFile(ctx context.Context, fileKey string) error {
-	_, err := store.db.ExecContext(ctx, `delete from source_files where file_key = ? and provider = 'codex'`, fileKey)
+func (store *Store) DeleteSourceFile(ctx context.Context, provider string, fileKey string) error {
+	_, err := store.db.ExecContext(ctx, `delete from source_files where file_key = ? and provider = ?`, fileKey, provider)
 	return err
 }
 

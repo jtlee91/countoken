@@ -83,6 +83,82 @@ func TestRunInspectPrintsCodexSessionSummaries(t *testing.T) {
 	}
 }
 
+func TestRunInspectPrintsClaudeSessionSummaries(t *testing.T) {
+	projectsDir := t.TempDir()
+	targetDir := filepath.Join(projectsDir, "-Users-jtlee-Code")
+	if err := os.MkdirAll(targetDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll(targetDir) error = %v", err)
+	}
+	target := filepath.Join(targetDir, "session.jsonl")
+	copyFile(t, filepath.Join("..", "..", "testdata", "claude", "session.jsonl"), target)
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"inspect",
+		"--provider",
+		"claude",
+		"--claude-projects",
+		projectsDir,
+		"--state-dir",
+		t.TempDir(),
+	}, &stdout)
+	if err != nil {
+		t.Fatalf("run(inspect claude) error = %v", err)
+	}
+
+	var result inspectResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Unmarshal(stdout) error = %v; stdout = %s", err, stdout.String())
+	}
+	if result.Provider != "claude" {
+		t.Fatalf("Provider = %q, want claude", result.Provider)
+	}
+	if result.FilesScanned != 1 {
+		t.Fatalf("FilesScanned = %d, want 1", result.FilesScanned)
+	}
+	if result.FilesParsed != 1 || result.FilesReused != 0 || result.FilesSkipped != 0 {
+		t.Fatalf("parsed/reused/skipped = %d/%d/%d, want 1/0/0", result.FilesParsed, result.FilesReused, result.FilesSkipped)
+	}
+	if result.SessionsFound != 1 || len(result.Sessions) != 1 {
+		t.Fatalf("sessions found/len = %d/%d, want 1/1", result.SessionsFound, len(result.Sessions))
+	}
+	session := result.Sessions[0]
+	if session.UserTurnCount != 2 || session.LLMCallCount != 2 {
+		t.Fatalf("session counts = %+v, want two user turns and two llm calls", session)
+	}
+	if session.Tokens.Input != 1800 || session.Tokens.Output != 4665 || session.Tokens.Cache != 23555 || session.Tokens.Total != 30020 {
+		t.Fatalf("session tokens = %+v, want deduped Claude usage totals", session.Tokens)
+	}
+
+	var raw map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &raw); err != nil {
+		t.Fatalf("Unmarshal(raw stdout) error = %v", err)
+	}
+	sessions, ok := raw["sessions"].([]any)
+	if !ok || len(sessions) != 1 {
+		t.Fatalf("raw sessions = %#v, want one session object", raw["sessions"])
+	}
+	firstSession, ok := sessions[0].(map[string]any)
+	if !ok {
+		t.Fatalf("raw session = %#v, want object", sessions[0])
+	}
+	if _, ok := firstSession["provider"]; ok {
+		t.Fatalf("session object includes provider key: %s", stdout.String())
+	}
+
+	for _, forbidden := range []string{
+		"do not store this prompt",
+		"do not store this answer",
+		"do not store this thought",
+		target,
+		projectsDir,
+	} {
+		if strings.Contains(stdout.String(), forbidden) {
+			t.Fatalf("inspect output leaked %q: %s", forbidden, stdout.String())
+		}
+	}
+}
+
 func TestRunInspectReusesUnmodifiedSessionState(t *testing.T) {
 	sessionsDir := t.TempDir()
 	stateDir := t.TempDir()

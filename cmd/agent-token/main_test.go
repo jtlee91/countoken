@@ -33,9 +33,6 @@ func TestRunInspectPrintsCodexSessionSummaries(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("Unmarshal(stdout) error = %v; stdout = %s", err, stdout.String())
 	}
-	if result.Provider != "codex" {
-		t.Fatalf("Provider = %q, want codex", result.Provider)
-	}
 	if result.FilesScanned != 2 {
 		t.Fatalf("FilesScanned = %d, want 2", result.FilesScanned)
 	}
@@ -70,7 +67,14 @@ func TestRunInspectPrintsCodexSessionSummaries(t *testing.T) {
 		t.Fatalf("raw session = %#v, want object", sessions[0])
 	}
 	if _, ok := firstSession["provider"]; ok {
-		t.Fatalf("session object includes provider key: %s", stdout.String())
+		if firstSession["provider"] != "codex" {
+			t.Fatalf("session provider = %#v, want codex", firstSession["provider"])
+		}
+	} else {
+		t.Fatalf("session object does not include provider key: %s", stdout.String())
+	}
+	if _, ok := raw["provider"]; ok {
+		t.Fatalf("top-level output includes provider key: %s", stdout.String())
 	}
 
 	for _, forbidden := range []string{
@@ -115,9 +119,6 @@ func TestRunInspectDefaultsToAllProviders(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("Unmarshal(stdout) error = %v; stdout = %s", err, stdout.String())
 	}
-	if result.Provider != "all" {
-		t.Fatalf("Provider = %q, want all", result.Provider)
-	}
 	if result.FilesScanned != 3 {
 		t.Fatalf("FilesScanned = %d, want codex plus claude files", result.FilesScanned)
 	}
@@ -126,6 +127,32 @@ func TestRunInspectDefaultsToAllProviders(t *testing.T) {
 	}
 	if result.SessionsFound != 2 || len(result.Sessions) != 2 {
 		t.Fatalf("sessions found/len = %d/%d, want 2/2", result.SessionsFound, len(result.Sessions))
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &raw); err != nil {
+		t.Fatalf("Unmarshal(raw stdout) error = %v", err)
+	}
+	if _, ok := raw["provider"]; ok {
+		t.Fatalf("top-level output includes provider key: %s", stdout.String())
+	}
+	sessions, ok := raw["sessions"].([]any)
+	if !ok || len(sessions) != 2 {
+		t.Fatalf("raw sessions = %#v, want two session objects", raw["sessions"])
+	}
+	providers := map[string]int{}
+	for _, item := range sessions {
+		session, ok := item.(map[string]any)
+		if !ok {
+			t.Fatalf("raw session = %#v, want object", item)
+		}
+		provider, ok := session["provider"].(string)
+		if !ok {
+			t.Fatalf("session object missing string provider: %#v", session)
+		}
+		providers[provider]++
+	}
+	if providers["codex"] != 1 || providers["claude"] != 1 {
+		t.Fatalf("session providers = %#v, want one codex and one claude", providers)
 	}
 }
 
@@ -155,9 +182,6 @@ func TestRunInspectPrintsClaudeSessionSummaries(t *testing.T) {
 	var result inspectResult
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("Unmarshal(stdout) error = %v; stdout = %s", err, stdout.String())
-	}
-	if result.Provider != "claude" {
-		t.Fatalf("Provider = %q, want claude", result.Provider)
 	}
 	if result.FilesScanned != 1 {
 		t.Fatalf("FilesScanned = %d, want 1", result.FilesScanned)
@@ -189,7 +213,14 @@ func TestRunInspectPrintsClaudeSessionSummaries(t *testing.T) {
 		t.Fatalf("raw session = %#v, want object", sessions[0])
 	}
 	if _, ok := firstSession["provider"]; ok {
-		t.Fatalf("session object includes provider key: %s", stdout.String())
+		if firstSession["provider"] != "claude" {
+			t.Fatalf("session provider = %#v, want claude", firstSession["provider"])
+		}
+	} else {
+		t.Fatalf("session object does not include provider key: %s", stdout.String())
+	}
+	if _, ok := raw["provider"]; ok {
+		t.Fatalf("top-level output includes provider key: %s", stdout.String())
 	}
 
 	for _, forbidden := range []string{

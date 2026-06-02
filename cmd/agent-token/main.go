@@ -60,7 +60,7 @@ func run(args []string, stdout io.Writer) error {
 func runInspect(args []string, stdout io.Writer) error {
 	flags := flag.NewFlagSet("inspect", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	provider := flags.String("provider", "codex", "usage provider: codex or claude")
+	provider := flags.String("provider", "", "usage provider: codex, claude, or empty for all")
 	codexSessions := flags.String("codex-sessions", defaultCodexSessionsDir(), "Codex sessions directory")
 	claudeProjects := flags.String("claude-projects", defaultClaudeProjectsDir(), "Claude projects directory")
 	stateDir := flags.String("state-dir", defaultStateDir(), "local state directory")
@@ -68,26 +68,46 @@ func runInspect(args []string, stdout io.Writer) error {
 		return err
 	}
 
+	var result inspectResult
 	switch *provider {
+	case "":
+		codexResult, err := inspectProvider("codex", *codexSessions, *stateDir, codex.ParseSessionFile, codex.ErrNoTokenCounts)
+		if err != nil {
+			return err
+		}
+		claudeResult, err := inspectProvider("claude", *claudeProjects, *stateDir, claude.ParseSessionFile, claude.ErrNoUsage)
+		if err != nil {
+			return err
+		}
+		result = mergeInspectResults(codexResult, claudeResult)
 	case "codex":
-		return inspectProvider(stdout, "codex", *codexSessions, *stateDir, codex.ParseSessionFile, codex.ErrNoTokenCounts)
+		codexResult, err := inspectProvider("codex", *codexSessions, *stateDir, codex.ParseSessionFile, codex.ErrNoTokenCounts)
+		if err != nil {
+			return err
+		}
+		result = codexResult
 	case "claude":
-		return inspectProvider(stdout, "claude", *claudeProjects, *stateDir, claude.ParseSessionFile, claude.ErrNoUsage)
+		claudeResult, err := inspectProvider("claude", *claudeProjects, *stateDir, claude.ParseSessionFile, claude.ErrNoUsage)
+		if err != nil {
+			return err
+		}
+		result = claudeResult
 	default:
 		return fmt.Errorf("unsupported provider %q: expected codex or claude", *provider)
 	}
+	return writeInspectResult(stdout, result)
 }
 
 type sessionParser func(path string) (usage.SessionSummary, error)
 
-func inspectProvider(stdout io.Writer, provider string, root string, stateDir string, parseSession sessionParser, skipErr error) error {
+func inspectProvider(provider string, root string, stateDir string, parseSession sessionParser, skipErr error) (inspectResult, error) {
 	paths, err := jsonlFiles(root)
 	if err != nil {
-		return err
+		return inspectResult{}, err
 	}
 	store, err := state.Open(filepath.Join(stateDir, "usage.sqlite"))
 	if err != nil {
-		return err
+		return inspectResult{}, err
 	}
 	defer store.Close()
 
@@ -99,11 +119,11 @@ func inspectProvider(stdout io.Writer, provider string, root string, stateDir st
 	for _, path := range paths {
 		metadata, err := statJSONL(path)
 		if err != nil {
-			return err
+			return inspectResult{}, err
 		}
 		key := fileKey(path)
 		if cached, ok, err := store.SourceFile(ctx, provider, key); err != nil {
-			return err
+			return inspectResult{}, err
 		} else if ok && cached.SizeBytes == metadata.SizeBytes && cached.ModifiedAt == metadata.ModifiedAt {
 			result.FilesReused++
 			result.Sessions = append(result.Sessions, cached.Session)
@@ -115,20 +135,36 @@ func inspectProvider(stdout io.Writer, provider string, root string, stateDir st
 			if errors.Is(err, skipErr) {
 				result.FilesSkipped++
 				if err := store.DeleteSourceFile(ctx, provider, key); err != nil {
-					return err
+					return inspectResult{}, err
 				}
 				continue
 			}
-			return err
+			return inspectResult{}, err
 		}
 		result.FilesParsed++
 		result.Sessions = append(result.Sessions, summary)
 		if err := store.UpsertSourceFile(ctx, provider, key, metadata.SizeBytes, metadata.ModifiedAt, summary); err != nil {
-			return err
+			return inspectResult{}, err
 		}
 	}
 	result.SessionsFound = len(result.Sessions)
+	return result, nil
+}
 
+func mergeInspectResults(results ...inspectResult) inspectResult {
+	merged := inspectResult{Provider: "all"}
+	for _, result := range results {
+		merged.FilesScanned += result.FilesScanned
+		merged.FilesParsed += result.FilesParsed
+		merged.FilesReused += result.FilesReused
+		merged.FilesSkipped += result.FilesSkipped
+		merged.Sessions = append(merged.Sessions, result.Sessions...)
+	}
+	merged.SessionsFound = len(merged.Sessions)
+	return merged
+}
+
+func writeInspectResult(stdout io.Writer, result inspectResult) error {
 	encoder := json.NewEncoder(stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(result)
@@ -148,6 +184,9 @@ func jsonlFiles(root string) ([]string, error) {
 		}
 		return nil
 	}); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, err
 	}
 	sort.Strings(paths)

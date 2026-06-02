@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -326,6 +328,144 @@ func TestRunInspectReusesUnmodifiedSessionState(t *testing.T) {
 	if third.FilesParsed != 1 || third.FilesReused != 0 {
 		t.Fatalf("third run parsed/reused = %d/%d, want 1/0 after mtime change", third.FilesParsed, third.FilesReused)
 	}
+}
+
+func TestRunSyncPostsStoredSessions(t *testing.T) {
+	stateDir := t.TempDir()
+	db, err := sql.Open("sqlite", filepath.Join(stateDir, "usage.sqlite"))
+	if err != nil {
+		t.Fatalf("sql.Open(sqlite state) error = %v", err)
+	}
+	if _, err := db.Exec(`
+		create table sessions (
+			session_hash text primary key,
+			provider text not null,
+			started_at text not null,
+			ended_at text not null,
+			user_turn_count integer not null,
+			llm_call_count integer not null,
+			input_tokens integer not null,
+			output_tokens integer not null,
+			cache_tokens integer not null,
+			reasoning_tokens integer not null,
+			total_tokens integer not null,
+			updated_at text not null
+		);
+
+		create table source_files (
+			file_key text primary key,
+			provider text not null,
+			size_bytes integer not null,
+			modified_at text not null,
+			session_hash text not null,
+			last_parsed_at text not null
+		);
+
+		insert into sessions (
+			session_hash,
+			provider,
+			started_at,
+			ended_at,
+			user_turn_count,
+			llm_call_count,
+			input_tokens,
+			output_tokens,
+			cache_tokens,
+			reasoning_tokens,
+			total_tokens,
+			updated_at
+		) values (
+			'session-hash',
+			'codex',
+			'2026-06-02T13:00:00+09:00',
+			'2026-06-02T13:05:00+09:00',
+			3,
+			5,
+			100,
+			20,
+			70,
+			4,
+			190,
+			'2026-06-02T13:06:00+09:00'
+		);
+	`); err != nil {
+		t.Fatalf("seed sqlite state error = %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("Close(sqlite state) error = %v", err)
+	}
+
+	var requestBody map[string]any
+	previousClient := syncHTTPClient
+	syncHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Method != http.MethodPost {
+				t.Fatalf("method = %s, want POST", r.Method)
+			}
+			if r.Header.Get("Authorization") != "Bearer test-token" {
+				t.Fatalf("Authorization = %q, want bearer token", r.Header.Get("Authorization"))
+			}
+			if r.Header.Get("Content-Type") != "application/json" {
+				t.Fatalf("Content-Type = %q, want application/json", r.Header.Get("Content-Type"))
+			}
+			if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+				t.Fatalf("Decode(request body) error = %v", err)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body:       io.NopCloser(strings.NewReader(`{"upserted":1}`)),
+			}, nil
+		}),
+	}
+	t.Cleanup(func() {
+		syncHTTPClient = previousClient
+	})
+
+	var stdout bytes.Buffer
+	err = run([]string{
+		"sync",
+		"--state-dir",
+		stateDir,
+		"--endpoint",
+		"https://example.test/sync",
+		"--token",
+		"test-token",
+	}, &stdout)
+	if err != nil {
+		t.Fatalf("run(sync) error = %v", err)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Unmarshal(sync stdout) error = %v; stdout = %s", err, stdout.String())
+	}
+	if result["sessions_uploaded"].(float64) != 1 {
+		t.Fatalf("sync result = %#v, want one uploaded session", result)
+	}
+	if _, ok := requestBody["user_id"]; ok {
+		t.Fatalf("request should not include user_id: %#v", requestBody)
+	}
+	sessions, ok := requestBody["sessions"].([]any)
+	if !ok || len(sessions) != 1 {
+		t.Fatalf("request sessions = %#v, want one session", requestBody["sessions"])
+	}
+	session := sessions[0].(map[string]any)
+	if session["session_hash"] != "session-hash" || session["provider"] != "codex" {
+		t.Fatalf("request session identity = %#v", session)
+	}
+	if _, ok := session["local_updated_at"]; !ok {
+		t.Fatalf("request session missing local_updated_at: %#v", session)
+	}
+	if strings.Contains(stdout.String(), "secret") {
+		t.Fatalf("sync output leaked sensitive text: %s", stdout.String())
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
 }
 
 func runInspectForTest(t *testing.T, sessionsDir, stateDir string) inspectResult {

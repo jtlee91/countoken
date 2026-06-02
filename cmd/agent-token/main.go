@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,6 +24,8 @@ import (
 )
 
 var kst = time.FixedZone("KST", 9*60*60)
+
+var syncHTTPClient = http.DefaultClient
 
 type inspectResult struct {
 	FilesScanned  int                     `json:"files_scanned"`
@@ -42,6 +46,29 @@ type fileMetadata struct {
 	ModifiedAt string
 }
 
+type syncResult struct {
+	SessionsUploaded int `json:"sessions_uploaded"`
+}
+
+type syncPayload struct {
+	Sessions []remoteSessionItem `json:"sessions"`
+}
+
+type remoteSessionItem struct {
+	SessionHash     string `json:"session_hash"`
+	Provider        string `json:"provider"`
+	StartedAt       string `json:"started_at"`
+	EndedAt         string `json:"ended_at"`
+	UserTurnCount   int    `json:"user_turn_count"`
+	LLMCallCount    int    `json:"llm_call_count"`
+	InputTokens     int    `json:"input_tokens"`
+	OutputTokens    int    `json:"output_tokens"`
+	CacheTokens     int    `json:"cache_tokens"`
+	ReasoningTokens int    `json:"reasoning_tokens"`
+	TotalTokens     int    `json:"total_tokens"`
+	LocalUpdatedAt  string `json:"local_updated_at"`
+}
+
 func main() {
 	if err := run(os.Args[1:], os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -56,8 +83,10 @@ func run(args []string, stdout io.Writer) error {
 	switch args[0] {
 	case "inspect":
 		return runInspect(args[1:], stdout)
+	case "sync":
+		return runSync(args[1:], stdout)
 	default:
-		return errors.New("expected command: inspect")
+		return errors.New("expected command: inspect or sync")
 	}
 }
 
@@ -104,6 +133,96 @@ func runInspect(args []string, stdout io.Writer) error {
 		return nil
 	}
 	return writeInspectResult(stdout, result)
+}
+
+func runSync(args []string, stdout io.Writer) error {
+	flags := flag.NewFlagSet("sync", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	stateDir := flags.String("state-dir", defaultStateDir(), "local state directory")
+	endpoint := flags.String("endpoint", os.Getenv("TOKEN_AGENT_SYNC_ENDPOINT"), "sync endpoint URL")
+	token := flags.String("token", os.Getenv("TOKEN_AGENT_SYNC_TOKEN"), "bearer token for sync endpoint")
+	quiet := flags.Bool("quiet", false, "suppress JSON output")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *endpoint == "" {
+		return errors.New("sync requires --endpoint")
+	}
+
+	store, err := state.Open(filepath.Join(*stateDir, "usage.sqlite"))
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	sessions, err := store.ListSessions(context.Background())
+	if err != nil {
+		return err
+	}
+	payload := buildSyncPayload(sessions)
+	if err := postSyncPayload(context.Background(), *endpoint, *token, payload); err != nil {
+		return err
+	}
+
+	result := syncResult{
+		SessionsUploaded: len(payload.Sessions),
+	}
+	if *quiet {
+		return nil
+	}
+	encoder := json.NewEncoder(stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(result)
+}
+
+func buildSyncPayload(sessions []state.SessionRow) syncPayload {
+	payload := syncPayload{
+		Sessions: make([]remoteSessionItem, 0, len(sessions)),
+	}
+	for _, session := range sessions {
+		payload.Sessions = append(payload.Sessions, remoteSessionItem{
+			SessionHash:     session.SessionHash,
+			Provider:        session.Provider,
+			StartedAt:       session.StartedAt,
+			EndedAt:         session.EndedAt,
+			UserTurnCount:   session.UserTurnCount,
+			LLMCallCount:    session.LLMCallCount,
+			InputTokens:     session.Tokens.Input,
+			OutputTokens:    session.Tokens.Output,
+			CacheTokens:     session.Tokens.Cache,
+			ReasoningTokens: session.Tokens.Reasoning,
+			TotalTokens:     session.Tokens.Total,
+			LocalUpdatedAt:  session.UpdatedAt,
+		})
+	}
+	return payload
+}
+
+func postSyncPayload(ctx context.Context, endpoint string, token string, payload syncPayload) error {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := syncHTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("sync endpoint returned %s: %s", resp.Status, string(responseBody))
+	}
+	return nil
 }
 
 type sessionParser func(path string) (usage.SessionSummary, error)

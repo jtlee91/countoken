@@ -23,6 +23,12 @@ type SourceFile struct {
 	Session    usage.SessionSummary
 }
 
+type SessionRow struct {
+	Provider  string
+	UpdatedAt string
+	usage.SessionSummary
+}
+
 func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
@@ -47,6 +53,56 @@ func Open(path string) (*Store, error) {
 
 func (store *Store) Close() error {
 	return store.db.Close()
+}
+
+func (store *Store) ListSessions(ctx context.Context) ([]SessionRow, error) {
+	rows, err := store.db.QueryContext(ctx, `
+		select
+			provider,
+			session_hash,
+			started_at,
+			ended_at,
+			user_turn_count,
+			llm_call_count,
+			input_tokens,
+			output_tokens,
+			cache_tokens,
+			reasoning_tokens,
+			total_tokens,
+			updated_at
+		from sessions
+		order by started_at, provider, session_hash
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []SessionRow
+	for rows.Next() {
+		var session SessionRow
+		if err := rows.Scan(
+			&session.Provider,
+			&session.SessionHash,
+			&session.StartedAt,
+			&session.EndedAt,
+			&session.UserTurnCount,
+			&session.LLMCallCount,
+			&session.Tokens.Input,
+			&session.Tokens.Output,
+			&session.Tokens.Cache,
+			&session.Tokens.Reasoning,
+			&session.Tokens.Total,
+			&session.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, session)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return sessions, nil
 }
 
 func (store *Store) SourceFile(ctx context.Context, provider string, fileKey string) (SourceFile, bool, error) {

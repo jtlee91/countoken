@@ -33,8 +33,8 @@ func TestParseSessionFileSummarizesTokenCounts(t *testing.T) {
 	if summary.LLMCallCount != 2 {
 		t.Fatalf("LLMCallCount = %d, want 2", summary.LLMCallCount)
 	}
-	if summary.Tokens.Input != 250 {
-		t.Fatalf("Tokens.Input = %d, want final total input", summary.Tokens.Input)
+	if summary.Tokens.Input != 170 {
+		t.Fatalf("Tokens.Input = %d, want final input excluding cached input", summary.Tokens.Input)
 	}
 	if summary.Tokens.Output != 35 {
 		t.Fatalf("Tokens.Output = %d, want final total output", summary.Tokens.Output)

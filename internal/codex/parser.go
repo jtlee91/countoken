@@ -99,7 +99,7 @@ func ParseSessionFile(path string) (SessionSummary, error) {
 				summary.EndedAt = timestamp
 				summary.LLMCallCount++
 				summary.Tokens = TokenSummary{
-					Input:     usage.InputTokens,
+					Input:     uncachedInputTokens(usage),
 					Output:    usage.OutputTokens,
 					Cache:     usage.CachedInputTokens,
 					Reasoning: usage.ReasoningOutputTokens,
@@ -151,6 +151,14 @@ func readEventPayload(raw json.RawMessage) (string, tokenUsage, bool, error) {
 		return payload.Type, tokenUsage{}, false, fmt.Errorf("parse total_token_usage: %w", err)
 	}
 	return payload.Type, usage, true, nil
+}
+
+func uncachedInputTokens(usage tokenUsage) int {
+	input := usage.InputTokens - usage.CachedInputTokens
+	if input < 0 {
+		return 0
+	}
+	return input
 }
 
 func hashSessionID(value string) string {

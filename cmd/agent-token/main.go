@@ -15,8 +15,10 @@ import (
 	"sort"
 	"time"
 
+	"github.com/jtlee/local-agent-usage/internal/claude"
 	"github.com/jtlee/local-agent-usage/internal/codex"
 	"github.com/jtlee/local-agent-usage/internal/state"
+	"github.com/jtlee/local-agent-usage/internal/usage"
 )
 
 var kst = time.FixedZone("KST", 9*60*60)
@@ -28,7 +30,7 @@ type inspectResult struct {
 	FilesReused   int                    `json:"files_reused"`
 	FilesSkipped  int                    `json:"files_skipped"`
 	SessionsFound int                    `json:"sessions_found"`
-	Sessions      []codex.SessionSummary `json:"sessions"`
+	Sessions      []usage.SessionSummary `json:"sessions"`
 }
 
 type fileMetadata struct {
@@ -58,24 +60,39 @@ func run(args []string, stdout io.Writer) error {
 func runInspect(args []string, stdout io.Writer) error {
 	flags := flag.NewFlagSet("inspect", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
+	provider := flags.String("provider", "codex", "usage provider: codex or claude")
 	codexSessions := flags.String("codex-sessions", defaultCodexSessionsDir(), "Codex sessions directory")
+	claudeProjects := flags.String("claude-projects", defaultClaudeProjectsDir(), "Claude projects directory")
 	stateDir := flags.String("state-dir", defaultStateDir(), "local state directory")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 
-	paths, err := jsonlFiles(*codexSessions)
+	switch *provider {
+	case "codex":
+		return inspectProvider(stdout, "codex", *codexSessions, *stateDir, codex.ParseSessionFile, codex.ErrNoTokenCounts)
+	case "claude":
+		return inspectProvider(stdout, "claude", *claudeProjects, *stateDir, claude.ParseSessionFile, claude.ErrNoUsage)
+	default:
+		return fmt.Errorf("unsupported provider %q: expected codex or claude", *provider)
+	}
+}
+
+type sessionParser func(path string) (usage.SessionSummary, error)
+
+func inspectProvider(stdout io.Writer, provider string, root string, stateDir string, parseSession sessionParser, skipErr error) error {
+	paths, err := jsonlFiles(root)
 	if err != nil {
 		return err
 	}
-	store, err := state.Open(filepath.Join(*stateDir, "usage.sqlite"))
+	store, err := state.Open(filepath.Join(stateDir, "usage.sqlite"))
 	if err != nil {
 		return err
 	}
 	defer store.Close()
 
 	result := inspectResult{
-		Provider:     "codex",
+		Provider:     provider,
 		FilesScanned: len(paths),
 	}
 	ctx := context.Background()
@@ -85,7 +102,7 @@ func runInspect(args []string, stdout io.Writer) error {
 			return err
 		}
 		key := fileKey(path)
-		if cached, ok, err := store.SourceFile(ctx, key); err != nil {
+		if cached, ok, err := store.SourceFile(ctx, provider, key); err != nil {
 			return err
 		} else if ok && cached.SizeBytes == metadata.SizeBytes && cached.ModifiedAt == metadata.ModifiedAt {
 			result.FilesReused++
@@ -93,11 +110,11 @@ func runInspect(args []string, stdout io.Writer) error {
 			continue
 		}
 
-		summary, err := codex.ParseSessionFile(path)
+		summary, err := parseSession(path)
 		if err != nil {
-			if errors.Is(err, codex.ErrNoTokenCounts) {
+			if errors.Is(err, skipErr) {
 				result.FilesSkipped++
-				if err := store.DeleteSourceFile(ctx, key); err != nil {
+				if err := store.DeleteSourceFile(ctx, provider, key); err != nil {
 					return err
 				}
 				continue
@@ -106,7 +123,7 @@ func runInspect(args []string, stdout io.Writer) error {
 		}
 		result.FilesParsed++
 		result.Sessions = append(result.Sessions, summary)
-		if err := store.UpsertSourceFile(ctx, key, metadata.SizeBytes, metadata.ModifiedAt, summary); err != nil {
+		if err := store.UpsertSourceFile(ctx, provider, key, metadata.SizeBytes, metadata.ModifiedAt, summary); err != nil {
 			return err
 		}
 	}
@@ -143,6 +160,14 @@ func defaultCodexSessionsDir() string {
 		return filepath.Join(".codex", "sessions")
 	}
 	return filepath.Join(home, ".codex", "sessions")
+}
+
+func defaultClaudeProjectsDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".claude", "projects")
+	}
+	return filepath.Join(home, ".claude", "projects")
 }
 
 func defaultStateDir() string {

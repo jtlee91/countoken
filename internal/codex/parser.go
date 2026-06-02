@@ -2,36 +2,22 @@ package codex
 
 import (
 	"bufio"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/jtlee/local-agent-usage/internal/usage"
 )
 
 var ErrNoTokenCounts = errors.New("codex session contains no token_count events")
 
 var kst = time.FixedZone("KST", 9*60*60)
 
-type SessionSummary struct {
-	SessionHash   string       `json:"session_hash"`
-	StartedAt     string       `json:"started_at"`
-	EndedAt       string       `json:"ended_at"`
-	UserTurnCount int          `json:"user_turn_count"`
-	LLMCallCount  int          `json:"llm_call_count"`
-	Tokens        TokenSummary `json:"tokens"`
-}
-
-type TokenSummary struct {
-	Input     int `json:"input"`
-	Output    int `json:"output"`
-	Cache     int `json:"cache"`
-	Reasoning int `json:"reasoning"`
-	Total     int `json:"total"`
-}
+type SessionSummary = usage.SessionSummary
+type TokenSummary = usage.TokenSummary
 
 type record struct {
 	Timestamp string          `json:"timestamp"`
@@ -168,8 +154,7 @@ func readEventPayload(raw json.RawMessage) (string, tokenUsage, bool, error) {
 }
 
 func hashSessionID(value string) string {
-	sum := sha256.Sum256([]byte("codex-session:" + value))
-	return hex.EncodeToString(sum[:])
+	return usage.HashSessionID("codex", value)
 }
 
 func formatKST(value string) (string, error) {

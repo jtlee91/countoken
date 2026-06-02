@@ -24,13 +24,17 @@ import (
 var kst = time.FixedZone("KST", 9*60*60)
 
 type inspectResult struct {
-	Provider      string                 `json:"provider"`
-	FilesScanned  int                    `json:"files_scanned"`
-	FilesParsed   int                    `json:"files_parsed"`
-	FilesReused   int                    `json:"files_reused"`
-	FilesSkipped  int                    `json:"files_skipped"`
-	SessionsFound int                    `json:"sessions_found"`
-	Sessions      []usage.SessionSummary `json:"sessions"`
+	FilesScanned  int                     `json:"files_scanned"`
+	FilesParsed   int                     `json:"files_parsed"`
+	FilesReused   int                     `json:"files_reused"`
+	FilesSkipped  int                     `json:"files_skipped"`
+	SessionsFound int                     `json:"sessions_found"`
+	Sessions      []inspectSessionSummary `json:"sessions"`
+}
+
+type inspectSessionSummary struct {
+	Provider string `json:"provider"`
+	usage.SessionSummary
 }
 
 type fileMetadata struct {
@@ -112,7 +116,6 @@ func inspectProvider(provider string, root string, stateDir string, parseSession
 	defer store.Close()
 
 	result := inspectResult{
-		Provider:     provider,
 		FilesScanned: len(paths),
 	}
 	ctx := context.Background()
@@ -126,7 +129,10 @@ func inspectProvider(provider string, root string, stateDir string, parseSession
 			return inspectResult{}, err
 		} else if ok && cached.SizeBytes == metadata.SizeBytes && cached.ModifiedAt == metadata.ModifiedAt {
 			result.FilesReused++
-			result.Sessions = append(result.Sessions, cached.Session)
+			result.Sessions = append(result.Sessions, inspectSessionSummary{
+				Provider:       provider,
+				SessionSummary: cached.Session,
+			})
 			continue
 		}
 
@@ -142,7 +148,10 @@ func inspectProvider(provider string, root string, stateDir string, parseSession
 			return inspectResult{}, err
 		}
 		result.FilesParsed++
-		result.Sessions = append(result.Sessions, summary)
+		result.Sessions = append(result.Sessions, inspectSessionSummary{
+			Provider:       provider,
+			SessionSummary: summary,
+		})
 		if err := store.UpsertSourceFile(ctx, provider, key, metadata.SizeBytes, metadata.ModifiedAt, summary); err != nil {
 			return inspectResult{}, err
 		}
@@ -152,7 +161,7 @@ func inspectProvider(provider string, root string, stateDir string, parseSession
 }
 
 func mergeInspectResults(results ...inspectResult) inspectResult {
-	merged := inspectResult{Provider: "all"}
+	var merged inspectResult
 	for _, result := range results {
 		merged.FilesScanned += result.FilesScanned
 		merged.FilesParsed += result.FilesParsed

@@ -25,6 +25,8 @@ type record struct {
 	Type        string  `json:"type"`
 	Timestamp   string  `json:"timestamp"`
 	SessionID   string  `json:"sessionId"`
+	UUID        string  `json:"uuid"`
+	ParentUUID  string  `json:"parentUuid"`
 	IsMeta      bool    `json:"isMeta"`
 	RequestID   string  `json:"requestId"`
 	IsSidechain bool    `json:"isSidechain"`
@@ -48,6 +50,8 @@ type tokenUsage struct {
 
 type usageEntry struct {
 	Timestamp   time.Time
+	UUID        string
+	ParentUUID  string
 	MessageID   string
 	RequestID   string
 	IsSidechain bool
@@ -64,6 +68,8 @@ func ParseSessionFile(path string) (SessionSummary, error) {
 	var summary SessionSummary
 	var rawSessionID string
 	var usageEntries []usageEntry
+	recordsByUUID := map[string]record{}
+	var userPromptCount int
 	var startedAt time.Time
 	var endedAt time.Time
 
@@ -82,8 +88,11 @@ func ParseSessionFile(path string) (SessionSummary, error) {
 		if rawSessionID == "" {
 			rawSessionID = strings.TrimSpace(current.SessionID)
 		}
+		if current.UUID != "" {
+			recordsByUUID[current.UUID] = current
+		}
 		if isUserPrompt(current) {
-			summary.UserTurnCount++
+			userPromptCount++
 		}
 		if current.Message.Usage == nil {
 			continue
@@ -101,6 +110,8 @@ func ParseSessionFile(path string) (SessionSummary, error) {
 		}
 		usageEntries = append(usageEntries, usageEntry{
 			Timestamp:   timestamp,
+			UUID:        strings.TrimSpace(current.UUID),
+			ParentUUID:  strings.TrimSpace(current.ParentUUID),
 			MessageID:   strings.TrimSpace(current.Message.ID),
 			RequestID:   strings.TrimSpace(current.RequestID),
 			IsSidechain: current.IsSidechain,
@@ -118,6 +129,7 @@ func ParseSessionFile(path string) (SessionSummary, error) {
 	summary.StartedAt = formatKST(startedAt)
 	summary.EndedAt = formatKST(endedAt)
 	summary.LLMCallCount = len(deduped)
+	summary.UserTurnCount = linkedUserPromptCount(deduped, recordsByUUID, userPromptCount)
 	for _, entry := range deduped {
 		summary.Tokens.Input += entry.Usage.InputTokens
 		summary.Tokens.Output += entry.Usage.OutputTokens
@@ -132,6 +144,43 @@ func ParseSessionFile(path string) (SessionSummary, error) {
 	}
 
 	return summary, nil
+}
+
+func linkedUserPromptCount(entries []usageEntry, recordsByUUID map[string]record, fallbackUserPromptCount int) int {
+	if len(recordsByUUID) == 0 {
+		return fallbackUserPromptCount
+	}
+
+	userPromptUUIDs := map[string]struct{}{}
+	for _, entry := range entries {
+		if promptUUID := linkedUserPromptUUID(entry, recordsByUUID); promptUUID != "" {
+			userPromptUUIDs[promptUUID] = struct{}{}
+		}
+	}
+	if len(userPromptUUIDs) == 0 {
+		return fallbackUserPromptCount
+	}
+	return len(userPromptUUIDs)
+}
+
+func linkedUserPromptUUID(entry usageEntry, recordsByUUID map[string]record) string {
+	seen := map[string]struct{}{}
+	for parentUUID := entry.ParentUUID; parentUUID != ""; {
+		if _, ok := seen[parentUUID]; ok {
+			return ""
+		}
+		seen[parentUUID] = struct{}{}
+
+		parent, ok := recordsByUUID[parentUUID]
+		if !ok {
+			return ""
+		}
+		if isUserPrompt(parent) {
+			return parentUUID
+		}
+		parentUUID = strings.TrimSpace(parent.ParentUUID)
+	}
+	return ""
 }
 
 func isUserPrompt(current record) bool {

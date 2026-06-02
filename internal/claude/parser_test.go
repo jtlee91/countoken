@@ -49,3 +49,17 @@ func TestParseSessionFileSummarizesDedupedUsage(t *testing.T) {
 		t.Fatalf("Tokens.Total = %d, want input + output + cache read + cache creation", summary.Tokens.Total)
 	}
 }
+
+func TestParseSessionFileCountsOnlyUserPromptsLinkedToUsage(t *testing.T) {
+	summary, err := ParseSessionFile(filepath.Join("..", "..", "testdata", "claude", "leading-context-user.jsonl"))
+	if err != nil {
+		t.Fatalf("ParseSessionFile() error = %v", err)
+	}
+
+	if summary.UserTurnCount != 1 {
+		t.Fatalf("UserTurnCount = %d, want only the user prompt linked to assistant usage", summary.UserTurnCount)
+	}
+	if summary.LLMCallCount != 1 {
+		t.Fatalf("LLMCallCount = %d, want one assistant usage", summary.LLMCallCount)
+	}
+}

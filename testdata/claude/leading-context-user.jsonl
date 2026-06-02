@@ -1,0 +1,5 @@
+{"type":"user","sessionId":"claude-leading-context","timestamp":"2026-06-02T09:53:13.335Z","uuid":"user-context","message":{"role":"user","content":"context row that does not directly produce assistant usage"}}
+{"type":"system","sessionId":"claude-leading-context","timestamp":"2026-06-02T09:53:13.337Z","uuid":"system-after-context","parentUuid":"user-context"}
+{"type":"user","sessionId":"claude-leading-context","timestamp":"2026-06-02T09:53:14.190Z","uuid":"user-prompt","parentUuid":"system-after-context","message":{"role":"user","content":"actual prompt"}}
+{"type":"attachment","sessionId":"claude-leading-context","timestamp":"2026-06-02T09:53:14.190Z","uuid":"attachment-1","parentUuid":"user-prompt"}
+{"type":"assistant","sessionId":"claude-leading-context","timestamp":"2026-06-02T09:53:15.628Z","uuid":"assistant-1","parentUuid":"attachment-1","requestId":"req-1","message":{"role":"assistant","id":"msg-1","model":"claude-opus-4-8","content":[{"type":"text","text":"do not store this answer"}],"usage":{"input_tokens":10,"output_tokens":20,"cache_creation_input_tokens":30,"cache_read_input_tokens":40}}}

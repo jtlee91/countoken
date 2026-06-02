@@ -18,6 +18,8 @@ func TestRunInspectPrintsCodexSessionSummaries(t *testing.T) {
 	var stdout bytes.Buffer
 	err := run([]string{
 		"inspect",
+		"--provider",
+		"codex",
 		"--codex-sessions",
 		sessionsDir,
 		"--state-dir",
@@ -80,6 +82,50 @@ func TestRunInspectPrintsCodexSessionSummaries(t *testing.T) {
 		if strings.Contains(stdout.String(), forbidden) {
 			t.Fatalf("inspect output leaked %q: %s", forbidden, stdout.String())
 		}
+	}
+}
+
+func TestRunInspectDefaultsToAllProviders(t *testing.T) {
+	codexSessionsDir := t.TempDir()
+	copyFile(t, filepath.Join("..", "..", "testdata", "codex", "session.jsonl"), filepath.Join(codexSessionsDir, "session.jsonl"))
+	copyFile(t, filepath.Join("..", "..", "testdata", "codex", "no-token-count.jsonl"), filepath.Join(codexSessionsDir, "no-token-count.jsonl"))
+
+	claudeProjectsDir := t.TempDir()
+	claudeProjectDir := filepath.Join(claudeProjectsDir, "-Users-jtlee-Code")
+	if err := os.MkdirAll(claudeProjectDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll(claudeProjectDir) error = %v", err)
+	}
+	copyFile(t, filepath.Join("..", "..", "testdata", "claude", "session.jsonl"), filepath.Join(claudeProjectDir, "session.jsonl"))
+
+	var stdout bytes.Buffer
+	err := run([]string{
+		"inspect",
+		"--codex-sessions",
+		codexSessionsDir,
+		"--claude-projects",
+		claudeProjectsDir,
+		"--state-dir",
+		t.TempDir(),
+	}, &stdout)
+	if err != nil {
+		t.Fatalf("run(inspect all) error = %v", err)
+	}
+
+	var result inspectResult
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Unmarshal(stdout) error = %v; stdout = %s", err, stdout.String())
+	}
+	if result.Provider != "all" {
+		t.Fatalf("Provider = %q, want all", result.Provider)
+	}
+	if result.FilesScanned != 3 {
+		t.Fatalf("FilesScanned = %d, want codex plus claude files", result.FilesScanned)
+	}
+	if result.FilesParsed != 2 || result.FilesSkipped != 1 || result.FilesReused != 0 {
+		t.Fatalf("parsed/skipped/reused = %d/%d/%d, want 2/1/0", result.FilesParsed, result.FilesSkipped, result.FilesReused)
+	}
+	if result.SessionsFound != 2 || len(result.Sessions) != 2 {
+		t.Fatalf("sessions found/len = %d/%d, want 2/2", result.SessionsFound, len(result.Sessions))
 	}
 }
 
@@ -218,6 +264,8 @@ func runInspectForTest(t *testing.T, sessionsDir, stateDir string) inspectResult
 	var stdout bytes.Buffer
 	err := run([]string{
 		"inspect",
+		"--provider",
+		"codex",
 		"--codex-sessions",
 		sessionsDir,
 		"--state-dir",

@@ -1,5 +1,9 @@
 import type { DashboardData, ViewerProfile } from "@/lib/data/models";
-import { formatTokenAmount } from "@/lib/format/tokens";
+import {
+  formatTokenAmount,
+  formatTokenSharePercent,
+  tokenSharePercent,
+} from "@/lib/format/tokens";
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
 
@@ -21,14 +25,6 @@ function formatDateTime(value: string | null) {
 
 function formatSessionTime(startedAt: string, endedAt: string) {
   return `${formatDateTime(startedAt)} - ${formatDateTime(endedAt)}`;
-}
-
-function percent(value: number, total: number) {
-  if (total <= 0) {
-    return 0;
-  }
-
-  return Math.round((value / total) * 100);
 }
 
 export function DashboardContent({
@@ -58,11 +54,6 @@ export function DashboardContent({
       label: "Output",
       value: dashboard.tokenBreakdown.output,
       color: "bg-badge-gold",
-    },
-    {
-      label: "Reasoning",
-      value: dashboard.tokenBreakdown.reasoning,
-      color: "bg-warm-amber",
     },
   ];
   const metrics = [
@@ -184,14 +175,21 @@ export function DashboardContent({
           {dashboard.tokenBreakdown.total > 0 ? (
             <div className="grid gap-4">
               {breakdownItems.map((item) => {
-                const share = percent(item.value, dashboard.tokenBreakdown.total);
+                const share = tokenSharePercent(
+                  item.value,
+                  dashboard.tokenBreakdown.total,
+                );
+                const shareLabel = formatTokenSharePercent(
+                  item.value,
+                  dashboard.tokenBreakdown.total,
+                );
 
                 return (
                   <div key={item.label}>
                     <div className="mb-2 flex items-center justify-between gap-3 text-sm font-extrabold">
                       <span>{item.label}</span>
                       <span className="font-mono">
-                        {formatTokenAmount(item.value)} · {share}%
+                        {formatTokenAmount(item.value)} · {shareLabel}%
                       </span>
                     </div>
                     <div className="h-3 overflow-hidden rounded-full bg-surface-alt">

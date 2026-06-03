@@ -148,9 +148,8 @@ function addToBreakdown(
   row: UsageSessionAggregateRow,
 ) {
   breakdown.input += row.input_tokens;
-  breakdown.output += row.output_tokens;
+  breakdown.output += row.output_tokens + row.reasoning_tokens;
   breakdown.cache += row.cache_tokens;
-  breakdown.reasoning += row.reasoning_tokens;
   breakdown.total += row.total_tokens;
 }
 
@@ -229,9 +228,8 @@ export function summarizeUsageDailyDashboard(
     activeSessions += row.session_count;
     totalLLMCalls += row.llm_call_count;
     tokenBreakdown.input += row.input_tokens;
-    tokenBreakdown.output += row.output_tokens;
+    tokenBreakdown.output += row.output_tokens + row.reasoning_tokens;
     tokenBreakdown.cache += row.cache_tokens;
-    tokenBreakdown.reasoning += row.reasoning_tokens;
     tokenBreakdown.total += row.total_tokens;
 
     if (row.device_id) {

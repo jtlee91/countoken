@@ -138,6 +138,14 @@ func (store *Store) MarkSessionsSynced(ctx context.Context, sessions []SessionRo
 	return tx.Commit()
 }
 
+func (store *Store) MarkAllSessionsPendingSync(ctx context.Context) error {
+	_, err := store.db.ExecContext(ctx, `
+		update sessions
+		set need_sync = 1, synced_at = null
+	`)
+	return err
+}
+
 func (store *Store) SourceFile(ctx context.Context, provider string, fileKey string) (SourceFile, bool, error) {
 	row := store.db.QueryRowContext(ctx, `
 		select

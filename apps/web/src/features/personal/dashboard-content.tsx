@@ -302,17 +302,17 @@ export function DashboardContent({
         </div>
         {dashboard.recentSessions.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[930px] table-fixed border-separate border-spacing-0 text-left text-sm">
+            <table className="w-full min-w-[880px] table-fixed border-separate border-spacing-0 text-left text-sm">
               <colgroup>
+                <col className="w-[11.5rem]" />
+                <col className="w-[6.5rem]" />
                 <col className="w-[12rem]" />
-                <col className="w-[7rem]" />
-                <col className="w-[12rem]" />
+                <col className="w-[4.7rem]" />
+                <col className="w-[4.3rem]" />
+                <col className="w-[5.3rem]" />
                 <col className="w-[5.5rem]" />
-                <col className="w-[5.5rem]" />
-                <col className="w-[6.5rem]" />
-                <col className="w-[6.5rem]" />
-                <col className="w-[6.5rem]" />
-                <col className="w-[6.5rem]" />
+                <col className="w-[5.6rem]" />
+                <col className="w-[5.6rem]" />
               </colgroup>
               <thead>
                 <tr className="text-xs font-extrabold uppercase text-muted">

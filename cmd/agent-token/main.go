@@ -47,12 +47,12 @@ type fileMetadata struct {
 }
 
 type syncResult struct {
-	SessionsUploaded int `json:"sessions_uploaded"`
+	DailyUploaded int `json:"daily_uploaded"`
 }
 
 type syncPayload struct {
-	Device   remoteDeviceItem    `json:"device"`
-	Sessions []remoteSessionItem `json:"sessions"`
+	Device remoteDeviceItem       `json:"device"`
+	Daily  []remoteDailyUsageItem `json:"daily"`
 }
 
 type remoteDeviceItem struct {
@@ -61,18 +61,19 @@ type remoteDeviceItem struct {
 	Platform    string `json:"platform"`
 }
 
-type remoteSessionItem struct {
-	SessionHash     string `json:"session_hash"`
+type remoteDailyUsageItem struct {
+	UsageDate       string `json:"usage_date"`
 	Provider        string `json:"provider"`
-	StartedAt       string `json:"started_at"`
-	EndedAt         string `json:"ended_at"`
-	UserTurnCount   int    `json:"user_turn_count"`
+	Model           string `json:"model"`
+	SessionCount    int    `json:"session_count"`
 	LLMCallCount    int    `json:"llm_call_count"`
 	InputTokens     int    `json:"input_tokens"`
 	OutputTokens    int    `json:"output_tokens"`
 	CacheTokens     int    `json:"cache_tokens"`
 	ReasoningTokens int    `json:"reasoning_tokens"`
 	TotalTokens     int    `json:"total_tokens"`
+	FirstUsedAt     string `json:"first_used_at"`
+	LastUsedAt      string `json:"last_used_at"`
 	LocalUpdatedAt  string `json:"local_updated_at"`
 }
 
@@ -268,6 +269,10 @@ func runSync(args []string, stdout io.Writer) error {
 	if len(sessions) == 0 {
 		return writeSyncResult(stdout, *quiet, 0)
 	}
+	daily, err := store.ListPendingDailyUsage(ctx)
+	if err != nil {
+		return err
+	}
 
 	resolvedEndpoint := *endpoint
 	resolvedToken := *token
@@ -285,7 +290,7 @@ func runSync(args []string, stdout io.Writer) error {
 		resolvedEndpoint = defaultSyncEndpoint
 	}
 
-	payload := buildSyncPayload(device, sessions)
+	payload := buildSyncPayload(device, daily)
 	if err := postSyncPayload(ctx, resolvedEndpoint, resolvedToken, payload); err != nil {
 		return err
 	}
@@ -293,17 +298,17 @@ func runSync(args []string, stdout io.Writer) error {
 		return err
 	}
 
-	return writeSyncResult(stdout, *quiet, len(payload.Sessions))
+	return writeSyncResult(stdout, *quiet, len(payload.Daily))
 }
 
-func writeSyncResult(stdout io.Writer, quiet bool, sessionsUploaded int) error {
+func writeSyncResult(stdout io.Writer, quiet bool, dailyUploaded int) error {
 	if quiet {
 		return nil
 	}
 	encoder := json.NewEncoder(stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(syncResult{
-		SessionsUploaded: sessionsUploaded,
+		DailyUploaded: dailyUploaded,
 	})
 }
 
@@ -315,29 +320,30 @@ func getenvDefault(name string, fallback string) string {
 	return fallback
 }
 
-func buildSyncPayload(device state.LocalDevice, sessions []state.SessionRow) syncPayload {
+func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow) syncPayload {
 	payload := syncPayload{
 		Device: remoteDeviceItem{
 			DeviceID:    device.DeviceID,
 			DeviceLabel: device.DeviceLabel,
 			Platform:    device.Platform,
 		},
-		Sessions: make([]remoteSessionItem, 0, len(sessions)),
+		Daily: make([]remoteDailyUsageItem, 0, len(daily)),
 	}
-	for _, session := range sessions {
-		payload.Sessions = append(payload.Sessions, remoteSessionItem{
-			SessionHash:     session.SessionHash,
-			Provider:        session.Provider,
-			StartedAt:       session.StartedAt,
-			EndedAt:         session.EndedAt,
-			UserTurnCount:   session.UserTurnCount,
-			LLMCallCount:    session.LLMCallCount,
-			InputTokens:     session.Tokens.Input,
-			OutputTokens:    session.Tokens.Output,
-			CacheTokens:     session.Tokens.Cache,
-			ReasoningTokens: session.Tokens.Reasoning,
-			TotalTokens:     session.Tokens.Total,
-			LocalUpdatedAt:  session.UpdatedAt,
+	for _, row := range daily {
+		payload.Daily = append(payload.Daily, remoteDailyUsageItem{
+			UsageDate:       row.UsageDate,
+			Provider:        row.Provider,
+			Model:           row.Model,
+			SessionCount:    row.SessionCount,
+			LLMCallCount:    row.LLMCallCount,
+			InputTokens:     row.InputTokens,
+			OutputTokens:    row.OutputTokens,
+			CacheTokens:     row.CacheTokens,
+			ReasoningTokens: row.ReasoningTokens,
+			TotalTokens:     row.TotalTokens,
+			FirstUsedAt:     row.FirstUsedAt,
+			LastUsedAt:      row.LastUsedAt,
+			LocalUpdatedAt:  row.LocalUpdatedAt,
 		})
 	}
 	return payload

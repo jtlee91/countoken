@@ -85,17 +85,17 @@ func TestParseSessionFileRejectsFilesWithoutTokenCounts(t *testing.T) {
 	}
 }
 
-func TestParseSessionFileIgnoresTokenCountEventsWithoutUsage(t *testing.T) {
+func TestParseSessionFileIgnoresTokenCountEventsWithoutLastUsage(t *testing.T) {
 	summary, err := ParseSessionFile(filepath.Join("..", "..", "testdata", "codex", "missing-token-usage.jsonl"))
 	if err != nil {
 		t.Fatalf("ParseSessionFile() error = %v", err)
 	}
 
 	if summary.LLMCallCount != 1 {
-		t.Fatalf("LLMCallCount = %d, want only token_count events with usage", summary.LLMCallCount)
+		t.Fatalf("LLMCallCount = %d, want only token_count events with last_token_usage", summary.LLMCallCount)
 	}
 	if summary.StartedAt != "2026-06-02T14:17:05+09:00" {
-		t.Fatalf("StartedAt = %q, want first token_count timestamp with usage", summary.StartedAt)
+		t.Fatalf("StartedAt = %q, want first token_count timestamp with last_token_usage", summary.StartedAt)
 	}
 	if summary.Tokens.Total != 120 {
 		t.Fatalf("Tokens.Total = %d, want 120", summary.Tokens.Total)

@@ -69,8 +69,6 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 	var summary SessionSummary
 	var rawSessionID string
 	var calls []usage.UsageCall
-	var previousTotal tokenUsage
-	var hasPreviousTotal bool
 
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 1024), 64*1024*1024)
@@ -93,7 +91,7 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 			}
 			rawSessionID = id
 		case "event_msg":
-			eventType, totalUsage, lastUsage, hasTotalUsage, hasLastUsage, err := readEventPayload(current.Payload)
+			eventType, lastUsage, hasLastUsage, err := readEventPayload(current.Payload)
 			if err != nil {
 				return SessionUsage{}, err
 			}
@@ -101,23 +99,20 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 			case "user_message":
 				summary.UserTurnCount++
 			case "token_count":
-				if !hasTotalUsage {
+				if !hasLastUsage {
 					continue
 				}
 				timestamp, err := formatKST(current.Timestamp)
 				if err != nil {
 					return SessionUsage{}, err
 				}
-				callUsage := callTokenUsage(totalUsage, previousTotal, hasPreviousTotal, lastUsage, hasLastUsage)
-				previousTotal = totalUsage
-				hasPreviousTotal = true
 
 				if summary.StartedAt == "" {
 					summary.StartedAt = timestamp
 				}
 				summary.EndedAt = timestamp
 				summary.LLMCallCount++
-				tokens := tokenSummary(callUsage)
+				tokens := tokenSummary(lastUsage)
 				summary.Tokens.Input += tokens.Input
 				summary.Tokens.Output += tokens.Output
 				summary.Tokens.Cache += tokens.Cache
@@ -161,26 +156,13 @@ func readSessionID(raw json.RawMessage) (string, error) {
 	return strings.TrimSpace(payload.ID), nil
 }
 
-func readEventPayload(raw json.RawMessage) (string, tokenUsage, tokenUsage, bool, bool, error) {
+func readEventPayload(raw json.RawMessage) (string, tokenUsage, bool, error) {
 	var payload eventPayload
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return "", tokenUsage{}, tokenUsage{}, false, false, fmt.Errorf("parse event_msg payload: %w", err)
+		return "", tokenUsage{}, false, fmt.Errorf("parse event_msg payload: %w", err)
 	}
 	if payload.Type != "token_count" {
-		return payload.Type, tokenUsage{}, tokenUsage{}, false, false, nil
-	}
-	var totalUsageRaw json.RawMessage
-	if payload.Info != nil && len(payload.Info.TotalTokenUsage) > 0 {
-		totalUsageRaw = payload.Info.TotalTokenUsage
-	} else if len(payload.TotalTokenUsage) > 0 {
-		totalUsageRaw = payload.TotalTokenUsage
-	}
-	if len(totalUsageRaw) == 0 {
-		return payload.Type, tokenUsage{}, tokenUsage{}, false, false, nil
-	}
-	var totalUsage tokenUsage
-	if err := json.Unmarshal(totalUsageRaw, &totalUsage); err != nil {
-		return payload.Type, tokenUsage{}, tokenUsage{}, false, false, fmt.Errorf("parse total_token_usage: %w", err)
+		return payload.Type, tokenUsage{}, false, nil
 	}
 
 	var lastUsageRaw json.RawMessage
@@ -190,29 +172,13 @@ func readEventPayload(raw json.RawMessage) (string, tokenUsage, tokenUsage, bool
 		lastUsageRaw = payload.LastTokenUsage
 	}
 	if len(lastUsageRaw) == 0 {
-		return payload.Type, totalUsage, tokenUsage{}, true, false, nil
+		return payload.Type, tokenUsage{}, false, nil
 	}
 	var lastUsage tokenUsage
 	if err := json.Unmarshal(lastUsageRaw, &lastUsage); err != nil {
-		return payload.Type, tokenUsage{}, tokenUsage{}, false, false, fmt.Errorf("parse last_token_usage: %w", err)
+		return payload.Type, tokenUsage{}, false, fmt.Errorf("parse last_token_usage: %w", err)
 	}
-	return payload.Type, totalUsage, lastUsage, true, true, nil
-}
-
-func callTokenUsage(totalUsage tokenUsage, previousTotal tokenUsage, hasPreviousTotal bool, lastUsage tokenUsage, hasLastUsage bool) tokenUsage {
-	if hasLastUsage {
-		return lastUsage
-	}
-	if !hasPreviousTotal {
-		return totalUsage
-	}
-	return tokenUsage{
-		InputTokens:           nonNegativeDelta(totalUsage.InputTokens, previousTotal.InputTokens),
-		CachedInputTokens:     nonNegativeDelta(totalUsage.CachedInputTokens, previousTotal.CachedInputTokens),
-		OutputTokens:          nonNegativeDelta(totalUsage.OutputTokens, previousTotal.OutputTokens),
-		ReasoningOutputTokens: nonNegativeDelta(totalUsage.ReasoningOutputTokens, previousTotal.ReasoningOutputTokens),
-		TotalTokens:           nonNegativeDelta(totalUsage.TotalTokens, previousTotal.TotalTokens),
-	}
+	return payload.Type, lastUsage, true, nil
 }
 
 func tokenSummary(usage tokenUsage) TokenSummary {
@@ -223,14 +189,6 @@ func tokenSummary(usage tokenUsage) TokenSummary {
 		Reasoning: usage.ReasoningOutputTokens,
 		Total:     usage.TotalTokens,
 	}
-}
-
-func nonNegativeDelta(current int, previous int) int {
-	delta := current - previous
-	if delta < 0 {
-		return 0
-	}
-	return delta
 }
 
 func uncachedInputTokens(usage tokenUsage) int {

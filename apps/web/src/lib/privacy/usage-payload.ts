@@ -12,7 +12,6 @@ const allowedUsageKeys = [
   "output_tokens",
   "cache_creation_tokens",
   "cache_read_tokens",
-  "total_tokens",
   "user_message_count",
   "assistant_message_count",
   "collector_version",
@@ -75,7 +74,6 @@ export type SafeUsageEvent = {
   output_tokens: number;
   cache_creation_tokens: number;
   cache_read_tokens: number;
-  total_tokens: number;
   user_message_count: number;
   assistant_message_count: number;
   collector_version: string;
@@ -224,7 +222,6 @@ export function validateUsagePayload(
           "cache_creation_tokens",
         ),
         cache_read_tokens: readNonNegativeInteger(record, "cache_read_tokens"),
-        total_tokens: readNonNegativeInteger(record, "total_tokens"),
         user_message_count: readNonNegativeInteger(
           record,
           "user_message_count",

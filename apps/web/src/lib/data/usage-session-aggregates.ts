@@ -21,7 +21,6 @@ export type UsageSessionAggregateRow = {
   input_tokens: number;
   output_tokens: number;
   cache_tokens: number;
-  total_tokens: number;
   local_updated_at: string;
   synced_at: string | null;
 };
@@ -36,7 +35,6 @@ export type UsageDailyAggregateRow = {
   input_tokens: number;
   output_tokens: number;
   cache_tokens: number;
-  total_tokens: number;
   first_used_at: string;
   last_used_at: string;
   local_updated_at: string;
@@ -140,14 +138,24 @@ function emptyBreakdown(): DashboardTokenBreakdown {
   };
 }
 
+function rowTotalTokens(row: {
+  input_tokens: number;
+  output_tokens: number;
+  cache_tokens: number;
+}) {
+  return row.input_tokens + row.output_tokens + row.cache_tokens;
+}
+
 function addToBreakdown(
   breakdown: DashboardTokenBreakdown,
   row: UsageSessionAggregateRow,
 ) {
+  const total = rowTotalTokens(row);
+
   breakdown.input += row.input_tokens;
   breakdown.output += row.output_tokens;
   breakdown.cache += row.cache_tokens;
-  breakdown.total += row.total_tokens;
+  breakdown.total += total;
 }
 
 function makeDailyUsage(now: Date) {
@@ -190,7 +198,7 @@ export function summarizeUsageDailyRows(
       continue;
     }
 
-    daily.totalTokens += row.total_tokens;
+    daily.totalTokens += rowTotalTokens(row);
     daily.sessions += row.session_count;
   }
 
@@ -221,30 +229,32 @@ export function summarizeUsageDailyDashboard(
 
   for (const row of rows) {
     const usageDate = normalizeUsageDate(row.usage_date);
-    totalTokens += row.total_tokens;
+    const rowTotal = rowTotalTokens(row);
+
+    totalTokens += rowTotal;
     activeSessions += row.session_count;
     totalLLMCalls += row.llm_call_count;
     tokenBreakdown.input += row.input_tokens;
     tokenBreakdown.output += row.output_tokens;
     tokenBreakdown.cache += row.cache_tokens;
-    tokenBreakdown.total += row.total_tokens;
+    tokenBreakdown.total += rowTotal;
 
     if (row.device_id) {
       devices.add(row.device_id);
     }
 
     if (usageDate === todayKey) {
-      todayTokens += row.total_tokens;
+      todayTokens += rowTotal;
     }
 
     if (usageDate >= weekStartKey) {
-      weeklyTokens += row.total_tokens;
+      weeklyTokens += rowTotal;
       weeklySessions += row.session_count;
     }
 
     const daily = dailyUsageByDate.get(usageDate);
     if (daily) {
-      daily.totalTokens += row.total_tokens;
+      daily.totalTokens += rowTotal;
       daily.sessions += row.session_count;
     }
 
@@ -252,7 +262,7 @@ export function summarizeUsageDailyDashboard(
     byAgent.set(row.provider, {
       agentType: row.provider,
       agentLabel: providerLabel(row.provider),
-      totalTokens: (existing?.totalTokens ?? 0) + row.total_tokens,
+      totalTokens: (existing?.totalTokens ?? 0) + rowTotal,
       activeTurns: 0,
       sessions: (existing?.sessions ?? 0) + row.session_count,
       llmCalls: (existing?.llmCalls ?? 0) + row.llm_call_count,
@@ -309,7 +319,7 @@ function toDashboardSession(row: UsageSessionAggregateRow): DashboardSession {
     inputTokens: row.input_tokens,
     outputTokens: row.output_tokens,
     cacheTokens: row.cache_tokens,
-    totalTokens: row.total_tokens,
+    totalTokens: rowTotalTokens(row),
     localUpdatedAt: row.local_updated_at,
     syncedAt: row.synced_at,
   };
@@ -339,17 +349,19 @@ export function summarizeUsageSessions(
 
   for (const row of rows) {
     const endedAt = new Date(row.ended_at);
-    totalTokens += row.total_tokens;
+    const rowTotal = rowTotalTokens(row);
+
+    totalTokens += rowTotal;
     activeTurns += row.user_turn_count;
     totalLLMCalls += row.llm_call_count;
     addToBreakdown(tokenBreakdown, row);
 
     if (endedAt >= todayStart) {
-      todayTokens += row.total_tokens;
+      todayTokens += rowTotal;
     }
 
     if (endedAt >= weekStart) {
-      weeklyTokens += row.total_tokens;
+      weeklyTokens += rowTotal;
       weeklyTurns += row.user_turn_count;
       weeklySessions += 1;
     }
@@ -357,7 +369,7 @@ export function summarizeUsageSessions(
     const dateKey = koreaDateKey(endedAt);
     const daily = dailyUsageByDate.get(dateKey);
     if (daily) {
-      daily.totalTokens += row.total_tokens;
+      daily.totalTokens += rowTotal;
       daily.sessions += 1;
     }
 
@@ -365,7 +377,7 @@ export function summarizeUsageSessions(
     byAgent.set(row.provider, {
       agentType: row.provider,
       agentLabel: providerLabel(row.provider),
-      totalTokens: (existing?.totalTokens ?? 0) + row.total_tokens,
+      totalTokens: (existing?.totalTokens ?? 0) + rowTotal,
       activeTurns: (existing?.activeTurns ?? 0) + row.user_turn_count,
       sessions: (existing?.sessions ?? 0) + 1,
       llmCalls: (existing?.llmCalls ?? 0) + row.llm_call_count,

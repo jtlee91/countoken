@@ -147,7 +147,6 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 		summary.Tokens.Input += tokens.Input
 		summary.Tokens.Output += tokens.Output
 		summary.Tokens.Cache += tokens.Cache
-		summary.Tokens.Total += tokens.Total
 		calls = append(calls, usage.UsageCall{
 			CallIndex:  index + 1,
 			OccurredAt: formatKST(entry.Timestamp),
@@ -295,7 +294,6 @@ func tokenSummary(usage tokenUsage) TokenSummary {
 		Input:  usage.InputTokens,
 		Output: usage.OutputTokens,
 		Cache:  cache,
-		Total:  usage.InputTokens + usage.OutputTokens + cache,
 	}
 }
 

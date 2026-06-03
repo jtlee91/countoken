@@ -10,7 +10,10 @@ type RankingProfileRow = {
 
 type RankingUsageTurnRow = {
   user_id: string;
-  total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_tokens: number;
+  cache_read_tokens: number;
 };
 
 type ShareCardRow = {
@@ -37,6 +40,15 @@ function startOfKoreaWeek() {
 
 function publicSlug() {
   return `tp-${randomBytes(9).toString("base64url")}`;
+}
+
+function usageTurnTotal(turn: RankingUsageTurnRow) {
+  return (
+    turn.input_tokens +
+    turn.output_tokens +
+    turn.cache_creation_tokens +
+    turn.cache_read_tokens
+  );
 }
 
 async function ensureRankingShareCards(
@@ -96,7 +108,9 @@ export async function refreshWeeklyGlobalRankingSnapshot(
   if (userIds.length > 0) {
     const { data: turns, error: turnsError } = await supabase
       .from("usage_turns")
-      .select("user_id, total_tokens")
+      .select(
+        "user_id, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens",
+      )
       .gte("occurred_at", startOfKoreaWeek().toISOString())
       .in("user_id", userIds);
 
@@ -107,7 +121,7 @@ export async function refreshWeeklyGlobalRankingSnapshot(
     for (const turn of (turns ?? []) as RankingUsageTurnRow[]) {
       totalsByUser.set(
         turn.user_id,
-        (totalsByUser.get(turn.user_id) ?? 0) + turn.total_tokens,
+        (totalsByUser.get(turn.user_id) ?? 0) + usageTurnTotal(turn),
       );
     }
   }

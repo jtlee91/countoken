@@ -72,7 +72,6 @@ type remoteDailyUsageItem struct {
 	InputTokens    int    `json:"input_tokens"`
 	OutputTokens   int    `json:"output_tokens"`
 	CacheTokens    int    `json:"cache_tokens"`
-	TotalTokens    int    `json:"total_tokens"`
 	FirstUsedAt    string `json:"first_used_at"`
 	LastUsedAt     string `json:"last_used_at"`
 	LocalUpdatedAt string `json:"local_updated_at"`
@@ -88,7 +87,6 @@ type remoteSessionUsageItem struct {
 	InputTokens    int    `json:"input_tokens"`
 	OutputTokens   int    `json:"output_tokens"`
 	CacheTokens    int    `json:"cache_tokens"`
-	TotalTokens    int    `json:"total_tokens"`
 	LocalUpdatedAt string `json:"local_updated_at"`
 }
 
@@ -356,7 +354,6 @@ func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, ses
 			InputTokens:    row.InputTokens,
 			OutputTokens:   row.OutputTokens,
 			CacheTokens:    row.CacheTokens,
-			TotalTokens:    row.TotalTokens,
 			FirstUsedAt:    row.FirstUsedAt,
 			LastUsedAt:     row.LastUsedAt,
 			LocalUpdatedAt: row.LocalUpdatedAt,
@@ -373,7 +370,6 @@ func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, ses
 			InputTokens:    row.Tokens.Input,
 			OutputTokens:   row.Tokens.Output,
 			CacheTokens:    row.Tokens.Cache,
-			TotalTokens:    row.Tokens.Total,
 			LocalUpdatedAt: row.UpdatedAt,
 		})
 	}

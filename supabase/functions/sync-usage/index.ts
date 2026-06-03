@@ -19,7 +19,6 @@ type DailyUsage = {
   input_tokens: number;
   output_tokens: number;
   cache_tokens: number;
-  total_tokens: number;
   first_used_at: string;
   last_used_at: string;
   local_updated_at: string;
@@ -35,7 +34,6 @@ type SessionUsage = {
   input_tokens: number;
   output_tokens: number;
   cache_tokens: number;
-  total_tokens: number;
   local_updated_at: string;
 };
 
@@ -104,7 +102,6 @@ function isDailyUsage(value: unknown): value is DailyUsage {
     isNonNegativeInteger(item.input_tokens) &&
     isNonNegativeInteger(item.output_tokens) &&
     isNonNegativeInteger(item.cache_tokens) &&
-    isNonNegativeInteger(item.total_tokens) &&
     typeof item.first_used_at === "string" &&
     typeof item.last_used_at === "string";
 }
@@ -122,8 +119,7 @@ function isSessionUsage(value: unknown): value is SessionUsage {
     isNonNegativeInteger(item.llm_call_count) &&
     isNonNegativeInteger(item.input_tokens) &&
     isNonNegativeInteger(item.output_tokens) &&
-    isNonNegativeInteger(item.cache_tokens) &&
-    isNonNegativeInteger(item.total_tokens);
+    isNonNegativeInteger(item.cache_tokens);
 }
 
 function parsePayload(value: unknown): SyncPayload | null {
@@ -208,7 +204,6 @@ Deno.serve(async (req: Request) => {
     input_tokens: daily.input_tokens,
     output_tokens: daily.output_tokens,
     cache_tokens: daily.cache_tokens,
-    total_tokens: daily.total_tokens,
     first_used_at: daily.first_used_at,
     last_used_at: daily.last_used_at,
     local_updated_at: daily.local_updated_at,
@@ -226,7 +221,6 @@ Deno.serve(async (req: Request) => {
     input_tokens: session.input_tokens,
     output_tokens: session.output_tokens,
     cache_tokens: session.cache_tokens,
-    total_tokens: session.total_tokens,
     local_updated_at: session.local_updated_at,
     synced_at: syncedAt,
   }));

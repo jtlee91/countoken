@@ -9,7 +9,6 @@ create table if not exists public.usage_daily (
   input_tokens bigint not null,
   output_tokens bigint not null,
   cache_tokens bigint not null,
-  total_tokens bigint not null,
   first_used_at timestamptz not null,
   last_used_at timestamptz not null,
   local_updated_at timestamptz not null,

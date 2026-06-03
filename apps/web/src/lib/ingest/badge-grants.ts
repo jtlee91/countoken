@@ -37,18 +37,11 @@ type UserBadgeRow = {
 type UsageTurnRow = {
   agent_type: string;
   occurred_at: string;
-  total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_tokens: number;
   cache_read_tokens: number;
 };
-
-type DailySummaryRow = {
-  usage_date: string;
-  total_tokens: number;
-};
-
-function formatDate(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
 
 function startOfUtcDate(value: string) {
   return new Date(`${value}T00:00:00.000Z`);
@@ -101,6 +94,15 @@ function compactEvidence(value: string) {
   return value.replace(/\s+/g, " ").slice(0, 160);
 }
 
+function usageTurnTotal(turn: UsageTurnRow) {
+  return (
+    turn.input_tokens +
+    turn.output_tokens +
+    turn.cache_creation_tokens +
+    turn.cache_read_tokens
+  );
+}
+
 export async function grantEligibleUsageBadges(
   supabase: SupabaseClient,
   userId: string,
@@ -112,7 +114,7 @@ export async function grantEligibleUsageBadges(
     windowStart.getUTCDate() - (BADGE_GRANT_RULES.steadyFlameWindowDays - 1),
   );
 
-  const [badgesResult, existingResult, turnsResult, dailyResult] =
+  const [badgesResult, existingResult, turnsResult] =
     await Promise.all([
       supabase
         .from("badges")
@@ -122,21 +124,17 @@ export async function grantEligibleUsageBadges(
       supabase.from("user_badges").select("badge_id").eq("user_id", userId),
       supabase
         .from("usage_turns")
-        .select("agent_type, occurred_at, total_tokens, cache_read_tokens")
+        .select(
+          "agent_type, occurred_at, input_tokens, output_tokens, cache_creation_tokens, cache_read_tokens",
+        )
         .eq("user_id", userId)
         .gte("occurred_at", windowStart.toISOString()),
-      supabase
-        .from("daily_usage_summaries")
-        .select("usage_date, total_tokens")
-        .eq("user_id", userId)
-        .gte("usage_date", formatDate(windowStart)),
     ]);
 
   if (
     badgesResult.error ||
     existingResult.error ||
-    turnsResult.error ||
-    dailyResult.error
+    turnsResult.error
   ) {
     return { ok: false };
   }
@@ -153,7 +151,6 @@ export async function grantEligibleUsageBadges(
     ),
   );
   const turns = (turnsResult.data ?? []) as UsageTurnRow[];
-  const dailySummaries = (dailyResult.data ?? []) as DailySummaryRow[];
   const agentTypes = new Set(turns.map((turn) => turn.agent_type));
   const nightTurns = turns.filter((turn) =>
     isNightOwlHour(hourInTimezone(turn.occurred_at, event.timezone)),
@@ -162,16 +159,21 @@ export async function grantEligibleUsageBadges(
     (total, turn) => total + turn.cache_read_tokens,
     0,
   );
-  const totalTokens = turns.reduce((total, turn) => total + turn.total_tokens, 0);
-  const activeDays = new Set(
-    dailySummaries
-      .filter((summary) => summary.total_tokens > 0)
-      .map((summary) => summary.usage_date),
-  );
-  const maxDailyTokens = dailySummaries.reduce(
-    (max, summary) => Math.max(max, summary.total_tokens),
+  const totalTokens = turns.reduce(
+    (total, turn) => total + usageTurnTotal(turn),
     0,
   );
+  const dailyTokens = new Map<string, number>();
+  for (const turn of turns) {
+    const usageDate = dateInTimezone(turn.occurred_at, event.timezone);
+    dailyTokens.set(usageDate, (dailyTokens.get(usageDate) ?? 0) + usageTurnTotal(turn));
+  }
+  const activeDays = new Set(
+    [...dailyTokens.entries()]
+      .filter(([, total]) => total > 0)
+      .map(([usageDate]) => usageDate),
+  );
+  const maxDailyTokens = Math.max(0, ...dailyTokens.values());
 
   const candidates: Partial<Record<ManagedBadgeKey, string>> = {};
 

@@ -28,15 +28,13 @@ type record struct {
 }
 
 type eventPayload struct {
-	Type            string          `json:"type"`
-	Info            *tokenInfo      `json:"info"`
-	TotalTokenUsage json.RawMessage `json:"total_token_usage"`
-	LastTokenUsage  json.RawMessage `json:"last_token_usage"`
+	Type           string          `json:"type"`
+	Info           *tokenInfo      `json:"info"`
+	LastTokenUsage json.RawMessage `json:"last_token_usage"`
 }
 
 type tokenInfo struct {
-	TotalTokenUsage json.RawMessage `json:"total_token_usage"`
-	LastTokenUsage  json.RawMessage `json:"last_token_usage"`
+	LastTokenUsage json.RawMessage `json:"last_token_usage"`
 }
 
 type sessionPayload struct {
@@ -47,7 +45,6 @@ type tokenUsage struct {
 	InputTokens       int `json:"input_tokens"`
 	CachedInputTokens int `json:"cached_input_tokens"`
 	OutputTokens      int `json:"output_tokens"`
-	TotalTokens       int `json:"total_tokens"`
 }
 
 func ParseSessionFile(path string) (SessionSummary, error) {
@@ -115,7 +112,6 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 				summary.Tokens.Input += tokens.Input
 				summary.Tokens.Output += tokens.Output
 				summary.Tokens.Cache += tokens.Cache
-				summary.Tokens.Total += tokens.Total
 				calls = append(calls, usage.UsageCall{
 					CallIndex:  summary.LLMCallCount,
 					OccurredAt: timestamp,
@@ -184,7 +180,6 @@ func tokenSummary(usage tokenUsage) TokenSummary {
 		Input:  uncachedInputTokens(usage),
 		Output: usage.OutputTokens,
 		Cache:  usage.CachedInputTokens,
-		Total:  usage.TotalTokens,
 	}
 }
 

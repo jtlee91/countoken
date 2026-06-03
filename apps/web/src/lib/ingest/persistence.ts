@@ -30,7 +30,6 @@ type UsageTurnSummaryRow = {
   agent_type: string;
   input_tokens: number;
   output_tokens: number;
-  total_tokens: number;
 };
 
 function duplicateError(error: { code?: string; message?: string }) {
@@ -177,7 +176,7 @@ async function rebuildDailyUsageSummary(
   const { data, error } = await supabase
     .from("usage_turns")
     .select(
-      "usage_session_id, device_id, agent_type, input_tokens, output_tokens, total_tokens",
+      "usage_session_id, device_id, agent_type, input_tokens, output_tokens",
     )
     .eq("user_id", context.userId)
     .gte("occurred_at", start.toISOString())
@@ -199,9 +198,8 @@ async function rebuildDailyUsageSummary(
     (acc, turn) => ({
       inputTokens: acc.inputTokens + turn.input_tokens,
       outputTokens: acc.outputTokens + turn.output_tokens,
-      totalTokens: acc.totalTokens + turn.total_tokens,
     }),
-    { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    { inputTokens: 0, outputTokens: 0 },
   );
 
   const { error: upsertError } = await supabase
@@ -211,7 +209,6 @@ async function rebuildDailyUsageSummary(
         user_id: context.userId,
         usage_date: usageDate,
         timezone: event.timezone,
-        total_tokens: totals.totalTokens,
         input_tokens: totals.inputTokens,
         output_tokens: totals.outputTokens,
         active_turns: turns.length,
@@ -284,7 +281,6 @@ export async function persistUsageEvent(
     output_tokens: event.output_tokens,
     cache_creation_tokens: event.cache_creation_tokens,
     cache_read_tokens: event.cache_read_tokens,
-    total_tokens: event.total_tokens,
     user_message_count: event.user_message_count,
     assistant_message_count: event.assistant_message_count,
     collector_version: event.collector_version,

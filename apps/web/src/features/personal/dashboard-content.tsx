@@ -45,19 +45,19 @@ function SessionTimeCell({
         <span className="absolute bottom-[4px] left-[2px] h-2.5 w-2.5 rounded-full bg-token-green" />
       </div>
       <div className="flex min-w-0 flex-col gap-1.5">
-        <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
-          <span className="w-7 shrink-0 text-[10px] font-black uppercase text-muted">
+        <div className="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
+          <span className="w-9 shrink-0 text-[10px] font-black uppercase text-muted">
             Start
           </span>
-          <span className="truncate font-mono text-xs font-black text-muted">
+          <span className="truncate font-mono text-[11px] font-black text-muted">
             {formatDateTime(startedAt)}
           </span>
         </div>
-        <div className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
-          <span className="w-7 shrink-0 text-[10px] font-black uppercase text-muted">
+        <div className="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
+          <span className="w-9 shrink-0 text-[10px] font-black uppercase text-muted">
             End
           </span>
-          <span className="truncate font-mono text-xs font-black text-muted">
+          <span className="truncate font-mono text-[11px] font-black text-muted">
             {formatDateTime(endedAt)}
           </span>
         </div>
@@ -302,11 +302,11 @@ export function DashboardContent({
         </div>
         {dashboard.recentSessions.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] table-fixed border-separate border-spacing-0 text-left text-sm">
+            <table className="w-full min-w-[930px] table-fixed border-separate border-spacing-0 text-left text-sm">
               <colgroup>
                 <col className="w-[12rem]" />
                 <col className="w-[7rem]" />
-                <col className="w-[11.5rem]" />
+                <col className="w-[12rem]" />
                 <col className="w-[5.5rem]" />
                 <col className="w-[5.5rem]" />
                 <col className="w-[6.5rem]" />

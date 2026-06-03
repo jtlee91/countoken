@@ -1,0 +1,21 @@
+import { SiteShell } from "@/components/site-shell";
+import { RankingContent } from "@/features/community/ranking-content";
+import { getAuthenticatedViewer } from "@/lib/auth/viewer";
+import { getRankingPageData } from "@/lib/data";
+
+export default async function RankingPage() {
+  const authenticatedViewer = await getAuthenticatedViewer();
+  const rankingData = await getRankingPageData(authenticatedViewer);
+
+  return (
+    <SiteShell activePath="/ranking" viewer={authenticatedViewer}>
+      <RankingContent
+        viewer={authenticatedViewer}
+        entries={rankingData.entries}
+        viewerBadges={rankingData.viewerBadges}
+        viewerRanking={rankingData.viewerRanking}
+        viewerShareSlug={rankingData.viewerShareSlug}
+      />
+    </SiteShell>
+  );
+}

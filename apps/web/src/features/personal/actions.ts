@@ -1,0 +1,168 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+
+import { refreshWeeklyGlobalRankingSnapshot } from "@/lib/ingest/ranking-snapshots";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+
+export type ProfileSettingsActionResult =
+  | { ok: true; safeMessage: string }
+  | {
+      ok: false;
+      errorType: "login_required" | "invalid_display_name" | "storage_failed";
+      safeMessage: string;
+    };
+
+export type DeviceRevokeActionResult =
+  | { ok: true; safeMessage: string }
+  | {
+      ok: false;
+      errorType: "login_required" | "invalid_device" | "storage_failed";
+      safeMessage: string;
+    };
+
+async function authenticatedUserId() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  return user?.id ?? null;
+}
+
+function cleanDisplayName(value: string) {
+  return value.trim().replace(/\s+/g, " ").slice(0, 40);
+}
+
+export async function updateProfileSettingsAction(input: {
+  displayName: string;
+  rankingOptIn: boolean;
+}): Promise<ProfileSettingsActionResult> {
+  const userId = await authenticatedUserId();
+
+  if (!userId) {
+    return {
+      ok: false,
+      errorType: "login_required",
+      safeMessage: "Login is required to update settings.",
+    };
+  }
+
+  const displayName = cleanDisplayName(input.displayName);
+
+  if (!displayName) {
+    return {
+      ok: false,
+      errorType: "invalid_display_name",
+      safeMessage: "Display name is required.",
+    };
+  }
+
+  let supabase: ReturnType<typeof createAdminClient>;
+  try {
+    supabase = createAdminClient();
+  } catch {
+    return {
+      ok: false,
+      errorType: "storage_failed",
+      safeMessage: "Profile settings could not be saved.",
+    };
+  }
+
+  const { error } = await supabase.from("profiles").upsert(
+    {
+      user_id: userId,
+      display_name: displayName,
+      avatar_style: "gradient",
+      ranking_opt_in: input.rankingOptIn,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+
+  if (error) {
+    return {
+      ok: false,
+      errorType: "storage_failed",
+      safeMessage: "Profile settings could not be saved.",
+    };
+  }
+
+  await refreshWeeklyGlobalRankingSnapshot(supabase);
+
+  revalidatePath("/ranking");
+  revalidatePath("/me/settings");
+  revalidatePath("/me/dashboard");
+
+  return { ok: true, safeMessage: "Settings saved." };
+}
+
+export async function revokeDeviceAction(
+  deviceId: string,
+): Promise<DeviceRevokeActionResult> {
+  const userId = await authenticatedUserId();
+
+  if (!userId) {
+    return {
+      ok: false,
+      errorType: "login_required",
+      safeMessage: "Login is required to revoke a device.",
+    };
+  }
+
+  if (!deviceId || deviceId.length > 80) {
+    return {
+      ok: false,
+      errorType: "invalid_device",
+      safeMessage: "Device id is invalid.",
+    };
+  }
+
+  let supabase: ReturnType<typeof createAdminClient>;
+  try {
+    supabase = createAdminClient();
+  } catch {
+    return {
+      ok: false,
+      errorType: "storage_failed",
+      safeMessage: "Device could not be revoked.",
+    };
+  }
+
+  const { data: device, error: deviceError } = await supabase
+    .from("devices")
+    .update({ revoked: true })
+    .eq("id", deviceId)
+    .eq("user_id", userId)
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (deviceError || !device) {
+    return {
+      ok: false,
+      errorType: "storage_failed",
+      safeMessage: "Device could not be revoked.",
+    };
+  }
+
+  await Promise.all([
+    supabase
+      .from("agent_installations")
+      .update({ status: "revoked" })
+      .eq("device_id", deviceId)
+      .eq("user_id", userId),
+    supabase.from("install_audits").insert({
+      user_id: userId,
+      device_id: deviceId,
+      agent_type: "codex",
+      step: "device_revoke",
+      result: "success",
+    }),
+  ]);
+
+  revalidatePath("/me/settings");
+  revalidatePath("/me/dashboard");
+
+  return { ok: true, safeMessage: "Device revoked." };
+}

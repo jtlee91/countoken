@@ -6,3 +6,16 @@ sessions.zip
 *.sqlite-shm
 *.sqlite-wal
 coverage.out
+
+# web app
+apps/web/.next/
+apps/web/out/
+apps/web/build/
+apps/web/node_modules/
+apps/web/.vercel/
+apps/web/.env
+apps/web/.env.*
+!apps/web/.env.example
+!apps/web/.env.local.example
+apps/web/*.tsbuildinfo
+apps/web/next-env.d.ts

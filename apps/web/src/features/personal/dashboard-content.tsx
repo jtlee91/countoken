@@ -263,7 +263,18 @@ export function DashboardContent({
         </div>
         {dashboard.recentSessions.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1040px] border-separate border-spacing-0 text-left text-sm">
+            <table className="w-full min-w-[960px] table-fixed border-separate border-spacing-0 text-left text-sm">
+              <colgroup>
+                <col className="w-[12rem]" />
+                <col className="w-[7rem]" />
+                <col className="w-[14rem]" />
+                <col className="w-[5.5rem]" />
+                <col className="w-[5.5rem]" />
+                <col className="w-[6.5rem]" />
+                <col className="w-[6.5rem]" />
+                <col className="w-[6.5rem]" />
+                <col className="w-[6.5rem]" />
+              </colgroup>
               <thead>
                 <tr className="text-xs font-extrabold uppercase text-muted">
                   <th className="border-b border-border px-3 py-2">Device</th>
@@ -294,7 +305,7 @@ export function DashboardContent({
                   <tr key={`${session.provider}-${session.sessionHash}`}>
                     <td className="border-b border-border px-3 py-3 font-bold text-muted">
                       <span
-                        className="block max-w-[220px] truncate"
+                        className="block max-w-[10rem] truncate"
                         title={session.deviceLabel}
                       >
                         {session.deviceLabel}
@@ -306,22 +317,22 @@ export function DashboardContent({
                     <td className="border-b border-border px-3 py-3 font-bold text-muted">
                       {formatSessionTime(session.startedAt, session.endedAt)}
                     </td>
-                    <td className="border-b border-border px-3 py-3 text-right font-mono font-black">
+                    <td className="whitespace-nowrap border-b border-border px-3 py-3 text-right font-mono font-black">
                       {numberFormatter.format(session.userTurnCount)}
                     </td>
-                    <td className="border-b border-border px-3 py-3 text-right font-mono font-black">
+                    <td className="whitespace-nowrap border-b border-border px-3 py-3 text-right font-mono font-black">
                       {numberFormatter.format(session.llmCallCount)}
                     </td>
-                    <td className="border-b border-border px-3 py-3 text-right font-mono font-bold">
+                    <td className="whitespace-nowrap border-b border-border px-3 py-3 text-right font-mono font-bold">
                       {formatTokenAmount(session.inputTokens)}
                     </td>
-                    <td className="border-b border-border px-3 py-3 text-right font-mono font-bold">
+                    <td className="whitespace-nowrap border-b border-border px-3 py-3 text-right font-mono font-bold">
                       {formatTokenAmount(session.cacheTokens)}
                     </td>
-                    <td className="border-b border-border px-3 py-3 text-right font-mono font-bold">
+                    <td className="whitespace-nowrap border-b border-border px-3 py-3 text-right font-mono font-bold">
                       {formatTokenAmount(session.outputTokens)}
                     </td>
-                    <td className="border-b border-border px-3 py-3 text-right font-mono font-black">
+                    <td className="whitespace-nowrap border-b border-border px-3 py-3 text-right font-mono font-black">
                       {formatTokenAmount(session.totalTokens)}
                     </td>
                   </tr>

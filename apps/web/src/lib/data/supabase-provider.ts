@@ -12,6 +12,7 @@ import type { RankingPageData, TokenPlaneDataProvider } from "@/lib/data/types";
 import {
   summarizeUsageDailyDashboard,
   type UsageDailyAggregateRow,
+  type UsageSessionAggregateRow,
 } from "@/lib/data/usage-session-aggregates";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { formatTokenAmount } from "@/lib/format/tokens";
@@ -183,7 +184,7 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
     }
 
     const supabase = await createClient();
-    const [dailyResult, rankingResult] = await Promise.all([
+    const [dailyResult, sessionsResult, rankingResult] = await Promise.all([
       supabase
         .from("usage_daily")
         .select(
@@ -209,6 +210,28 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
         .order("usage_date", { ascending: false })
         .limit(5000),
       supabase
+        .from("usage_sessions")
+        .select(
+          [
+            "session_hash",
+            "provider",
+            "started_at",
+            "ended_at",
+            "user_turn_count",
+            "llm_call_count",
+            "input_tokens",
+            "output_tokens",
+            "cache_tokens",
+            "reasoning_tokens",
+            "total_tokens",
+            "local_updated_at",
+            "synced_at",
+          ].join(","),
+        )
+        .eq("user_id", viewer.userId)
+        .order("ended_at", { ascending: false })
+        .limit(5),
+      supabase
         .from("ranking_snapshots")
         .select("rank_position, score")
         .eq("user_id", viewer.userId)
@@ -220,7 +243,12 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
     ]);
 
     const dailyRows = (dailyResult.data ?? []) as unknown as UsageDailyAggregateRow[];
-    const dashboard = summarizeUsageDailyDashboard(dailyRows);
+    const sessionRows = (sessionsResult.data ??
+      []) as unknown as UsageSessionAggregateRow[];
+    const dashboard = summarizeUsageDailyDashboard(dailyRows, {
+      recentSessionRows: sessionRows,
+      recentSessionLimit: 5,
+    });
 
     return {
       ...dashboard,

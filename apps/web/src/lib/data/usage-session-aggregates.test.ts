@@ -308,6 +308,45 @@ test("summarizeUsageDailyDashboard builds dashboard totals from usage_daily only
   );
 });
 
+test("summarizeUsageDailyDashboard includes the 5 most recent usage_sessions by ended_at", () => {
+  const sessionRows: UsageSessionAggregateRow[] = [
+    rows[2],
+    {
+      ...rows[0],
+      session_hash: "session-4",
+      ended_at: "2026-06-03T04:00:00.000Z",
+    },
+    {
+      ...rows[0],
+      session_hash: "session-6",
+      ended_at: "2026-06-03T06:00:00.000Z",
+    },
+    rows[0],
+    rows[1],
+    {
+      ...rows[0],
+      session_hash: "session-5",
+      ended_at: "2026-06-03T05:00:00.000Z",
+    },
+    {
+      ...rows[0],
+      session_hash: "session-3",
+      ended_at: "2026-06-03T03:00:00.000Z",
+    },
+  ];
+
+  const dashboard = summarizeUsageDailyDashboard([], {
+    now: new Date("2026-06-03T07:00:00.000Z"),
+    recentSessionRows: sessionRows,
+    recentSessionLimit: 5,
+  });
+
+  assert.deepEqual(
+    dashboard.recentSessions.map((session) => session.sessionHash),
+    ["session-6", "session-5", "session-4", "session-3", "codex-today"],
+  );
+});
+
 test("recentDailyUsageDateRange returns the KST recent 7 day range", () => {
   assert.deepEqual(
     recentDailyUsageDateRange({

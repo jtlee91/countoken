@@ -52,6 +52,11 @@ type DailyUsageOptions = {
   now?: Date;
 };
 
+type DailyDashboardOptions = DailyUsageOptions & {
+  recentSessionRows?: UsageSessionAggregateRow[];
+  recentSessionLimit?: number;
+};
+
 function providerLabel(provider: string) {
   switch (provider) {
     case "codex":
@@ -196,9 +201,10 @@ export function summarizeUsageDailyRows(
 
 export function summarizeUsageDailyDashboard(
   rows: UsageDailyAggregateRow[],
-  options: DailyUsageOptions = {},
+  options: DailyDashboardOptions = {},
 ): DashboardData {
   const now = options.now ?? new Date();
+  const recentSessionLimit = options.recentSessionLimit ?? 5;
   const todayKey = koreaDateKey(startOfKoreaToday(now));
   const weekStartKey = koreaDateKey(startOfKoreaWeek(now));
   const tokenBreakdown = emptyBreakdown();
@@ -259,6 +265,14 @@ export function summarizeUsageDailyDashboard(
     lastUploadAt = maxTimestamp(lastUploadAt, row.synced_at, row.local_updated_at);
   }
 
+  const recentSessions = [...(options.recentSessionRows ?? [])]
+    .sort(
+      (left, right) =>
+        new Date(right.ended_at).getTime() - new Date(left.ended_at).getTime(),
+    )
+    .slice(0, recentSessionLimit)
+    .map(toDashboardSession);
+
   return {
     todayTokens,
     weeklyTokens,
@@ -274,7 +288,7 @@ export function summarizeUsageDailyDashboard(
     lastUploadAt,
     tokenBreakdown,
     dailyUsage,
-    recentSessions: [],
+    recentSessions,
     agents: [...byAgent.values()].sort(
       (left, right) => right.totalTokens - left.totalTokens,
     ),

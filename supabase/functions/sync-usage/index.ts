@@ -10,25 +10,26 @@ type SyncDevice = {
   platform: Platform;
 };
 
-type UsageSession = {
-  session_hash: string;
+type DailyUsage = {
+  usage_date: string;
   provider: Provider;
-  started_at: string;
-  ended_at: string;
-  user_turn_count: number;
+  model: string;
+  session_count: number;
   llm_call_count: number;
   input_tokens: number;
   output_tokens: number;
   cache_tokens: number;
   reasoning_tokens: number;
   total_tokens: number;
+  first_used_at: string;
+  last_used_at: string;
   local_updated_at: string;
 };
 
 type SyncPayload = {
   user_id?: string;
   device: SyncDevice;
-  sessions: UsageSession[];
+  daily: DailyUsage[];
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -68,31 +69,36 @@ function isSyncDevice(value: unknown): value is SyncDevice {
     isPlatform(item.platform);
 }
 
-function isUsageSession(value: unknown): value is UsageSession {
+function isUsageDate(value: unknown): value is string {
+  return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function isDailyUsage(value: unknown): value is DailyUsage {
   if (!value || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
-  return typeof item.session_hash === "string" &&
-    item.session_hash.length > 0 &&
+  return isUsageDate(item.usage_date) &&
     isProvider(item.provider) &&
-    typeof item.started_at === "string" &&
-    typeof item.ended_at === "string" &&
+    typeof item.model === "string" &&
+    item.model.length <= 200 &&
+    isNonNegativeInteger(item.session_count) &&
     typeof item.local_updated_at === "string" &&
-    isNonNegativeInteger(item.user_turn_count) &&
     isNonNegativeInteger(item.llm_call_count) &&
     isNonNegativeInteger(item.input_tokens) &&
     isNonNegativeInteger(item.output_tokens) &&
     isNonNegativeInteger(item.cache_tokens) &&
     isNonNegativeInteger(item.reasoning_tokens) &&
-    isNonNegativeInteger(item.total_tokens);
+    isNonNegativeInteger(item.total_tokens) &&
+    typeof item.first_used_at === "string" &&
+    typeof item.last_used_at === "string";
 }
 
 function parsePayload(value: unknown): SyncPayload | null {
   if (!value || typeof value !== "object") return null;
   const payload = value as Record<string, unknown>;
   if (!isSyncDevice(payload.device)) return null;
-  if (!Array.isArray(payload.sessions)) return null;
-  if (payload.sessions.length > 500) return null;
-  if (!payload.sessions.every(isUsageSession)) return null;
+  if (!Array.isArray(payload.daily)) return null;
+  if (payload.daily.length > 5000) return null;
+  if (!payload.daily.every(isDailyUsage)) return null;
 
   return payload as SyncPayload;
 }
@@ -152,35 +158,36 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "database_error", detail: deviceError.message }, 500);
   }
 
-  const sessionRows = payload.sessions.map((session) => ({
+  const dailyRows = payload.daily.map((daily) => ({
     user_id: userID,
     device_id: payload.device.device_id,
-    session_hash: session.session_hash,
-    provider: session.provider,
-    started_at: session.started_at,
-    ended_at: session.ended_at,
-    user_turn_count: session.user_turn_count,
-    llm_call_count: session.llm_call_count,
-    input_tokens: session.input_tokens,
-    output_tokens: session.output_tokens,
-    cache_tokens: session.cache_tokens,
-    reasoning_tokens: session.reasoning_tokens,
-    total_tokens: session.total_tokens,
-    local_updated_at: session.local_updated_at,
+    usage_date: daily.usage_date,
+    provider: daily.provider,
+    model: daily.model,
+    session_count: daily.session_count,
+    llm_call_count: daily.llm_call_count,
+    input_tokens: daily.input_tokens,
+    output_tokens: daily.output_tokens,
+    cache_tokens: daily.cache_tokens,
+    reasoning_tokens: daily.reasoning_tokens,
+    total_tokens: daily.total_tokens,
+    first_used_at: daily.first_used_at,
+    last_used_at: daily.last_used_at,
+    local_updated_at: daily.local_updated_at,
     synced_at: syncedAt,
   }));
 
-  if (sessionRows.length === 0) {
+  if (dailyRows.length === 0) {
     return jsonResponse({ upserted: 0 });
   }
 
-  const { error: sessionError } = await supabase
-    .from("usage_sessions")
-    .upsert(sessionRows, { onConflict: "user_id,provider,session_hash" });
+  const { error: dailyError } = await supabase
+    .from("usage_daily")
+    .upsert(dailyRows, { onConflict: "user_id,device_id,usage_date,provider,model" });
 
-  if (sessionError) {
-    return jsonResponse({ error: "database_error", detail: sessionError.message }, 500);
+  if (dailyError) {
+    return jsonResponse({ error: "database_error", detail: dailyError.message }, 500);
   }
 
-  return jsonResponse({ upserted: sessionRows.length });
+  return jsonResponse({ upserted: dailyRows.length });
 });

@@ -41,6 +41,22 @@ type UsageCallRow struct {
 	usage.UsageCall
 }
 
+type DailyUsageRow struct {
+	UsageDate       string
+	Provider        string
+	Model           string
+	SessionCount    int
+	LLMCallCount    int
+	InputTokens     int
+	OutputTokens    int
+	CacheTokens     int
+	ReasoningTokens int
+	TotalTokens     int
+	FirstUsedAt     string
+	LastUsedAt      string
+	LocalUpdatedAt  string
+}
+
 type LocalDevice struct {
 	DeviceID    string
 	DeviceLabel string
@@ -193,6 +209,72 @@ func (store *Store) ListPendingUsageCalls(ctx context.Context) ([]UsageCallRow, 
 		return nil, err
 	}
 	return calls, nil
+}
+
+func (store *Store) ListPendingDailyUsage(ctx context.Context) ([]DailyUsageRow, error) {
+	rows, err := store.db.QueryContext(ctx, `
+		with affected_days as (
+			select distinct
+				uc.provider,
+				substr(uc.occurred_at, 1, 10) as usage_date
+			from usage_calls uc
+			join sessions s
+			  on s.provider = uc.provider
+			 and s.session_hash = uc.session_hash
+			where s.need_sync = 1
+		)
+		select
+			affected_days.usage_date,
+			uc.provider,
+			coalesce(uc.model, '') as model,
+			count(distinct uc.session_hash) as session_count,
+			count(*) as llm_call_count,
+			coalesce(sum(uc.input_tokens), 0) as input_tokens,
+			coalesce(sum(uc.output_tokens), 0) as output_tokens,
+			coalesce(sum(uc.cache_tokens), 0) as cache_tokens,
+			coalesce(sum(uc.reasoning_tokens), 0) as reasoning_tokens,
+			coalesce(sum(uc.total_tokens), 0) as total_tokens,
+			min(uc.occurred_at) as first_used_at,
+			max(uc.occurred_at) as last_used_at,
+			max(uc.updated_at) as local_updated_at
+		from affected_days
+		join usage_calls uc
+		  on uc.provider = affected_days.provider
+		 and substr(uc.occurred_at, 1, 10) = affected_days.usage_date
+		group by affected_days.usage_date, uc.provider, coalesce(uc.model, '')
+		order by affected_days.usage_date, uc.provider, coalesce(uc.model, '')
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var daily []DailyUsageRow
+	for rows.Next() {
+		var row DailyUsageRow
+		if err := rows.Scan(
+			&row.UsageDate,
+			&row.Provider,
+			&row.Model,
+			&row.SessionCount,
+			&row.LLMCallCount,
+			&row.InputTokens,
+			&row.OutputTokens,
+			&row.CacheTokens,
+			&row.ReasoningTokens,
+			&row.TotalTokens,
+			&row.FirstUsedAt,
+			&row.LastUsedAt,
+			&row.LocalUpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		daily = append(daily, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return daily, nil
 }
 
 func (store *Store) listSessions(ctx context.Context, where string) ([]SessionRow, error) {

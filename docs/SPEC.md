@@ -8,13 +8,14 @@ existing source first.
 ## Goal
 
 Build a local CLI named `token-agent` that reads local JSONL session files from
-Codex and Claude Code, extracts token usage summaries only, stores sanitized
-session summaries in SQLite, and optionally uploads changed session summaries to
-Supabase.
+Codex and Claude Code, extracts token usage only, stores sanitized session
+summaries and call-level usage rows in SQLite, and optionally uploads
+device-level daily usage aggregates to Supabase.
 
 The tool must not store or upload prompts, assistant outputs, raw JSONL lines,
 raw local file paths, or other message content. The only session identity stored
-locally/remotely is a deterministic hash of the provider-specific session ID.
+locally is a deterministic hash of the provider-specific session ID. Session
+identity is not uploaded to Supabase in the daily aggregate sync payload.
 
 ## Tech Stack
 
@@ -134,7 +135,7 @@ Do not print access tokens, refresh tokens, passwords, or OAuth codes.
 
 ### `sync`
 
-Uploads only locally changed sessions to Supabase.
+Uploads only daily aggregates affected by locally changed sessions to Supabase.
 
 ```bash
 token-agent sync
@@ -152,12 +153,17 @@ Important flags:
 Behavior:
 
 - Open `usage.sqlite`.
-- Read only rows where `sessions.need_sync = 1`.
-- If no pending rows exist, return `sessions_uploaded: 0` and do not call the
+- Read only rows where `sessions.need_sync = 1` to determine which sessions
+  changed locally.
+- If no pending rows exist, return `daily_uploaded: 0` and do not call the
   network.
+- Compute affected `(provider, usage_date)` pairs from pending sessions'
+  `usage_calls`.
+- Recompute full-day aggregates for those affected provider/date pairs from all
+  local `usage_calls`, split by `model`.
 - If no `--token` is supplied, load `auth.json`.
 - Refresh the access token if it is expired or will expire within five minutes.
-- POST pending sessions to the sync endpoint.
+- POST the daily aggregate rows to the sync endpoint.
 - After a successful HTTP 2xx response, mark uploaded rows as synced:
   `need_sync = 0`, `synced_at = now KST`.
 - If upload fails, leave `need_sync = 1` so the next sync retries.
@@ -166,7 +172,7 @@ Output shape:
 
 ```json
 {
-  "sessions_uploaded": 3
+  "daily_uploaded": 3
 }
 ```
 
@@ -491,8 +497,9 @@ alter table sessions add column need_sync integer not null default 1;
 alter table sessions add column synced_at text;
 ```
 
-The first sync after adding `need_sync` may upload all existing sessions once.
-After that, only changed sessions should be uploaded.
+The first sync after adding `need_sync` may cause all existing session dates to
+be recomputed and uploaded once. After that, only changed session dates should
+be recomputed and uploaded.
 
 ### `local_device`
 
@@ -626,46 +633,50 @@ using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 ```
 
-Remote session table: `public.usage_sessions`.
+Remote daily aggregate table: `public.usage_daily`.
 
 ```sql
-create table public.usage_sessions (
+create table public.usage_daily (
   user_id uuid not null,
-  device_id uuid,
-  session_hash text not null,
+  device_id uuid not null,
+  usage_date date not null,
   provider text not null check (provider in ('codex', 'claude')),
-  started_at timestamptz not null,
-  ended_at timestamptz not null,
-  user_turn_count integer not null,
+  model text not null,
+  session_count integer not null,
   llm_call_count integer not null,
   input_tokens bigint not null,
   output_tokens bigint not null,
   cache_tokens bigint not null,
   reasoning_tokens bigint not null,
   total_tokens bigint not null,
+  first_used_at timestamptz not null,
+  last_used_at timestamptz not null,
   local_updated_at timestamptz not null,
   synced_at timestamptz not null default now(),
-  primary key (user_id, provider, session_hash)
+  primary key (user_id, device_id, usage_date, provider, model),
+  foreign key (user_id, device_id)
+    references public.usage_devices (user_id, device_id)
+    on delete cascade
 );
 ```
 
 Enable RLS and allow authenticated users to read/write only their own rows:
 
 ```sql
-alter table public.usage_sessions enable row level security;
+alter table public.usage_daily enable row level security;
 
-create policy "usage_sessions_select_own"
-on public.usage_sessions
+create policy "usage_daily_select_own"
+on public.usage_daily
 for select
 using (auth.uid() = user_id);
 
-create policy "usage_sessions_insert_own"
-on public.usage_sessions
+create policy "usage_daily_insert_own"
+on public.usage_daily
 for insert
 with check (auth.uid() = user_id);
 
-create policy "usage_sessions_update_own"
-on public.usage_sessions
+create policy "usage_daily_update_own"
+on public.usage_daily
 for update
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
@@ -675,8 +686,8 @@ Supabase stores and displays `timestamptz` in the database timezone, normally
 UTC. Keep the database in UTC and format as KST in SQL or UI when needed:
 
 ```sql
-select started_at at time zone 'Asia/Seoul' as started_at_kst
-from public.usage_sessions;
+select first_used_at at time zone 'Asia/Seoul' as first_used_at_kst
+from public.usage_daily;
 ```
 
 ## Sync Payload
@@ -690,19 +701,20 @@ The CLI sends:
     "device_label": "jtlee-macbook-pro",
     "platform": "darwin"
   },
-  "sessions": [
+  "daily": [
     {
-      "session_hash": "hex_sha256",
+      "usage_date": "2026-06-03",
       "provider": "codex",
-      "started_at": "2026-06-03T10:00:00+09:00",
-      "ended_at": "2026-06-03T10:05:00+09:00",
-      "user_turn_count": 1,
+      "model": "gpt-5-codex",
+      "session_count": 1,
       "llm_call_count": 2,
       "input_tokens": 100,
       "output_tokens": 20,
       "cache_tokens": 80,
       "reasoning_tokens": 5,
       "total_tokens": 205,
+      "first_used_at": "2026-06-03T10:00:00+09:00",
+      "last_used_at": "2026-06-03T10:05:00+09:00",
       "local_updated_at": "2026-06-03T10:06:00+09:00"
     }
   ]
@@ -716,9 +728,14 @@ Sync behavior:
 
 - Read only local `sessions.need_sync = 1`.
 - Ensure a local device exists before building the payload.
-- Do not include local `usage_calls` in the Supabase payload.
-- If no pending sessions exist, return `sessions_uploaded: 0` without making a
+- Do not include local `sessions` or `usage_calls` rows in the Supabase
+  payload.
+- If no pending sessions exist, return `daily_uploaded: 0` without making a
   network request.
+- For pending sessions, derive affected provider/date pairs from
+  `usage_calls.occurred_at`.
+- Recompute each affected provider/date aggregate from all local calls for that
+  day, grouped by `model`.
 - After the endpoint succeeds, mark the uploaded sessions as synced.
 
 ## Supabase Edge Function
@@ -730,7 +747,7 @@ Settings:
 - `verify_jwt = true`
 - Method: POST only
 - Request auth: `Authorization: Bearer <Supabase access token>`
-- Max sessions per request: 500
+- Max daily rows per request: 5000
 
 Behavior:
 
@@ -739,18 +756,18 @@ Behavior:
 - Validate `device.device_id` as UUID.
 - Validate `device.device_label` as non-empty string.
 - Validate `device.platform` as `darwin`, `linux`, or `windows`.
-- Validate `sessions` array and each session field.
+- Validate `daily` array and each aggregate field.
 - Create Supabase client with project anon key and incoming Authorization
   header.
 - Call `supabase.auth.getUser()` and reject if no user.
 - Upsert `usage_devices` using `user_id,device_id`, setting
   `last_seen_at = new Date().toISOString()`.
-- Map each session to a row and set `user_id` to `userData.user.id`.
-- Set `device_id` on uploaded session rows.
+- Map each daily item to a row and set `user_id` to `userData.user.id`.
+- Set `device_id` on uploaded daily rows.
 - Set remote `synced_at` to `new Date().toISOString()`.
-- Upsert into `usage_sessions` with conflict target:
-  `user_id,provider,session_hash`.
-- Return `{ "upserted": sessionRows.length }`.
+- Upsert into `usage_daily` with conflict target:
+  `user_id,device_id,usage_date,provider,model`.
+- Return `{ "upserted": dailyRows.length }`.
 
 The Edge Function must not trust a client-provided `user_id`.
 
@@ -766,7 +783,7 @@ Never store or upload:
 - Raw provider session IDs
 - Supabase access or refresh tokens in stdout/log output
 
-Allowed local/remote data:
+Allowed local data:
 
 - Provider name
 - Hashed session ID
@@ -774,16 +791,39 @@ Allowed local/remote data:
 - User prompt count
 - LLM usage call count
 - Token totals
+- Call-level timestamps, model names, call hashes, and token totals
+- Device ID, label, platform, created/updated timestamps
+
+Allowed remote data:
+
+- Authenticated Supabase `user_id`
 - Device ID, label, platform, first seen, and last seen timestamps
-- Local update/sync timestamps
+- Usage date
+- Provider name
+- Model name
+- Daily session count
+- Daily LLM usage call count
+- Daily token totals
+- First/last local usage timestamp for that day/model/provider
+- Local update and remote sync timestamps
 
 Allowed local-only data:
 
 - `auth.json` with Supabase access and refresh tokens, mode `0600`
 - `source_files.file_key`, which is a hash of absolute local file path
 - JSONL file size and mtime for incremental parsing
+- Hashed session ID
+- Session timestamps
+- User prompt count
+- Session-level token totals
 - `usage_calls` call-level timestamps, model names, call hashes, and token
   totals
+
+Do not upload:
+
+- Hashed session IDs
+- Per-session rows
+- Per-call rows
 
 ## Test Coverage Requirements
 
@@ -808,15 +848,18 @@ Tests should cover at least:
   - local device UUID is created once and reused
   - unchanged source files are reused
   - call rows are stored and replaced when a source file is reparsed
+  - pending daily usage recomputes the whole affected day and groups by model
   - changed source files mark sessions `need_sync = 1`
-  - successful sync marks only uploaded sessions synced
+  - successful sync marks uploaded pending sessions synced
 - CLI:
   - default inspect parses both providers
   - `--quiet` suppresses stdout while still writing state
   - sync payload does not include `user_id`
   - sync payload includes device metadata
+  - sync payload includes daily aggregate rows
+  - sync payload does not include local `sessions`
   - sync payload does not include local `usage_calls`
-  - second sync after successful upload sends zero sessions and makes no network
+  - second sync after successful upload sends zero daily rows and makes no network
     request
   - login does not print passwords, access tokens, or refresh tokens
   - expired auth refreshes before sync
@@ -839,6 +882,5 @@ The current Google OAuth login is a localhost callback flow. For SSH/headless
 environments, add a device-code or browser-mediated polling flow later while
 reusing the same `auth.json` shape and refresh behavior.
 
-Device identity is intentionally deferred for MVP. When added, generate a
-local device UUID and later consider server-issued registration or signatures if
-tamper resistance is required.
+Device identity currently uses a locally generated UUID. Later, consider
+server-issued device registration or signatures if tamper resistance is needed.

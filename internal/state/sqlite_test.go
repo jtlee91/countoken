@@ -309,6 +309,106 @@ func TestListPendingUsageCalls(t *testing.T) {
 	}
 }
 
+func TestListPendingDailyUsageAggregatesAffectedDays(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "usage.sqlite")
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	if err := store.UpsertParsedSourceFile(context.Background(), "codex", "file-a", 123, "2026-06-02T16:30:00+09:00", usage.SessionUsage{
+		Summary: usage.SessionSummary{
+			SessionHash:   "session-a",
+			StartedAt:     "2026-06-02T16:00:00+09:00",
+			EndedAt:       "2026-06-02T16:20:00+09:00",
+			UserTurnCount: 1,
+			LLMCallCount:  2,
+			Tokens: usage.TokenSummary{
+				Input: 15,
+				Total: 15,
+			},
+		},
+		Calls: []usage.UsageCall{
+			{
+				CallKey:    "call-a1",
+				CallIndex:  1,
+				OccurredAt: "2026-06-02T16:01:00+09:00",
+				Tokens: usage.TokenSummary{
+					Input: 10,
+					Total: 10,
+				},
+			},
+			{
+				CallKey:    "call-a2",
+				CallIndex:  2,
+				OccurredAt: "2026-06-02T16:02:00+09:00",
+				Model:      "model-a",
+				Tokens: usage.TokenSummary{
+					Input:  5,
+					Output: 2,
+					Cache:  3,
+					Total:  10,
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertParsedSourceFile(session-a) error = %v", err)
+	}
+
+	pending, err := store.ListPendingSessions(context.Background())
+	if err != nil {
+		t.Fatalf("ListPendingSessions() error = %v", err)
+	}
+	if err := store.MarkSessionsSynced(context.Background(), pending); err != nil {
+		t.Fatalf("MarkSessionsSynced() error = %v", err)
+	}
+
+	if err := store.UpsertParsedSourceFile(context.Background(), "codex", "file-b", 123, "2026-06-02T16:31:00+09:00", usage.SessionUsage{
+		Summary: usage.SessionSummary{
+			SessionHash:   "session-b",
+			StartedAt:     "2026-06-02T17:00:00+09:00",
+			EndedAt:       "2026-06-02T17:10:00+09:00",
+			UserTurnCount: 1,
+			LLMCallCount:  1,
+			Tokens: usage.TokenSummary{
+				Input: 7,
+				Total: 7,
+			},
+		},
+		Calls: []usage.UsageCall{
+			{
+				CallKey:    "call-b1",
+				CallIndex:  1,
+				OccurredAt: "2026-06-02T17:01:00+09:00",
+				Tokens: usage.TokenSummary{
+					Input: 7,
+					Total: 7,
+				},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("UpsertParsedSourceFile(session-b) error = %v", err)
+	}
+
+	daily, err := store.ListPendingDailyUsage(context.Background())
+	if err != nil {
+		t.Fatalf("ListPendingDailyUsage() error = %v", err)
+	}
+	if len(daily) != 2 {
+		t.Fatalf("daily rows = %+v, want two rows split by model", daily)
+	}
+	if daily[0].UsageDate != "2026-06-02" || daily[0].Provider != "codex" || daily[0].Model != "" {
+		t.Fatalf("first daily identity = %+v", daily[0])
+	}
+	if daily[0].SessionCount != 2 || daily[0].LLMCallCount != 2 || daily[0].InputTokens != 17 || daily[0].TotalTokens != 17 {
+		t.Fatalf("first daily aggregate = %+v, want both blank-model sessions on affected day", daily[0])
+	}
+	if daily[1].Model != "model-a" || daily[1].SessionCount != 1 || daily[1].LLMCallCount != 1 || daily[1].TotalTokens != 10 {
+		t.Fatalf("second daily aggregate = %+v, want model-a row", daily[1])
+	}
+}
+
 func TestMarkAllSessionsPendingSync(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "usage.sqlite")
 	store, err := Open(dbPath)

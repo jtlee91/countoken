@@ -338,7 +338,7 @@ func TestRunInspectReusesUnmodifiedSessionState(t *testing.T) {
 	}
 }
 
-func TestRunSyncPostsStoredSessions(t *testing.T) {
+func TestRunSyncPostsDailyAggregates(t *testing.T) {
 	stateDir := t.TempDir()
 	db, err := sql.Open("sqlite", filepath.Join(stateDir, "usage.sqlite"))
 	if err != nil {
@@ -516,11 +516,11 @@ func TestRunSyncPostsStoredSessions(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("Unmarshal(sync stdout) error = %v; stdout = %s", err, stdout.String())
 	}
-	if result["sessions_uploaded"].(float64) != 1 {
-		t.Fatalf("sync result = %#v, want one uploaded session", result)
+	if result["daily_uploaded"].(float64) != 2 {
+		t.Fatalf("sync result = %#v, want two uploaded daily rows", result)
 	}
-	if _, ok := result["calls_uploaded"]; ok {
-		t.Fatalf("sync result should not include calls_uploaded: %#v", result)
+	if _, ok := result["sessions_uploaded"]; ok {
+		t.Fatalf("sync result should not include sessions_uploaded: %#v", result)
 	}
 	if _, ok := requestBody["user_id"]; ok {
 		t.Fatalf("request should not include user_id: %#v", requestBody)
@@ -532,19 +532,25 @@ func TestRunSyncPostsStoredSessions(t *testing.T) {
 	if device["device_id"] == "" || device["device_label"] == "" || device["platform"] == "" {
 		t.Fatalf("request device = %#v, want populated device fields", device)
 	}
-	sessions, ok := requestBody["sessions"].([]any)
-	if !ok || len(sessions) != 1 {
-		t.Fatalf("request sessions = %#v, want one session", requestBody["sessions"])
-	}
-	session := sessions[0].(map[string]any)
-	if session["session_hash"] != "session-hash" || session["provider"] != "codex" {
-		t.Fatalf("request session identity = %#v", session)
-	}
-	if _, ok := session["local_updated_at"]; !ok {
-		t.Fatalf("request session missing local_updated_at: %#v", session)
+	if _, ok := requestBody["sessions"]; ok {
+		t.Fatalf("request should not include sessions: %#v", requestBody["sessions"])
 	}
 	if _, ok := requestBody["calls"]; ok {
 		t.Fatalf("request should not include calls: %#v", requestBody["calls"])
+	}
+	daily, ok := requestBody["daily"].([]any)
+	if !ok || len(daily) != 2 {
+		t.Fatalf("request daily = %#v, want two rows", requestBody["daily"])
+	}
+	firstDaily := daily[0].(map[string]any)
+	if firstDaily["usage_date"] != "2026-06-02" || firstDaily["provider"] != "codex" {
+		t.Fatalf("request daily identity = %#v", firstDaily)
+	}
+	if firstDaily["session_count"].(float64) != 1 || firstDaily["llm_call_count"].(float64) != 1 {
+		t.Fatalf("request daily counts = %#v", firstDaily)
+	}
+	if _, ok := firstDaily["local_updated_at"]; !ok {
+		t.Fatalf("request daily missing local_updated_at: %#v", firstDaily)
 	}
 	if strings.Contains(stdout.String(), "secret") {
 		t.Fatalf("sync output leaked sensitive text: %s", stdout.String())
@@ -566,11 +572,11 @@ func TestRunSyncPostsStoredSessions(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatalf("Unmarshal(second sync stdout) error = %v; stdout = %s", err, stdout.String())
 	}
-	if result["sessions_uploaded"].(float64) != 0 {
-		t.Fatalf("second sync result = %#v, want zero uploaded sessions", result)
+	if result["daily_uploaded"].(float64) != 0 {
+		t.Fatalf("second sync result = %#v, want zero uploaded daily rows", result)
 	}
-	if _, ok := result["calls_uploaded"]; ok {
-		t.Fatalf("second sync result should not include calls_uploaded: %#v", result)
+	if _, ok := result["sessions_uploaded"]; ok {
+		t.Fatalf("second sync result should not include sessions_uploaded: %#v", result)
 	}
 	if requestCount != 1 {
 		t.Fatalf("sync request count = %d, want only first sync request", requestCount)

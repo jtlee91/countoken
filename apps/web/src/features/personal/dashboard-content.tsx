@@ -265,9 +265,10 @@ export function DashboardContent({
         </div>
         {dashboard.recentSessions.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] border-separate border-spacing-0 text-left text-sm">
+            <table className="w-full min-w-[1040px] border-separate border-spacing-0 text-left text-sm">
               <thead>
                 <tr className="text-xs font-extrabold uppercase text-muted">
+                  <th className="border-b border-border px-3 py-2">Device</th>
                   <th className="border-b border-border px-3 py-2">Provider</th>
                   <th className="border-b border-border px-3 py-2">Time</th>
                   <th className="border-b border-border px-3 py-2 text-right">
@@ -293,6 +294,14 @@ export function DashboardContent({
               <tbody>
                 {dashboard.recentSessions.map((session) => (
                   <tr key={`${session.provider}-${session.sessionHash}`}>
+                    <td className="border-b border-border px-3 py-3 font-bold text-muted">
+                      <span
+                        className="block max-w-[220px] truncate"
+                        title={session.deviceLabel}
+                      >
+                        {session.deviceLabel}
+                      </span>
+                    </td>
                     <td className="border-b border-border px-3 py-3 font-black">
                       {session.providerLabel}
                     </td>

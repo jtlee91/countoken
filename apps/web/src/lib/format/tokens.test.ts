@@ -14,8 +14,9 @@ test("formatTokenAmount keeps plain formatting below one thousand", () => {
   assert.equal(formatTokenAmount(999), "999");
 });
 
-test("formatTokenSharePercent keeps one decimal place", () => {
-  assert.equal(formatTokenSharePercent(7_800_000, 225_000_000), "3.5");
-  assert.equal(formatTokenSharePercent(0, 225_000_000), "0.0");
-  assert.equal(formatTokenSharePercent(10, 0), "0.0");
+test("formatTokenSharePercent rounds to a whole percent", () => {
+  assert.equal(formatTokenSharePercent(7_800_000, 225_000_000), "3");
+  assert.equal(formatTokenSharePercent(9_600_000, 264_252_400), "4");
+  assert.equal(formatTokenSharePercent(0, 225_000_000), "0");
+  assert.equal(formatTokenSharePercent(10, 0), "0");
 });

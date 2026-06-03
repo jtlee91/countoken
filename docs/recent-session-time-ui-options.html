@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Recent Session Time UI Options</title>
+    <style>
+      :root {
+        --background: #f7faf8;
+        --foreground: #17211a;
+        --surface: #ffffff;
+        --surface-alt: #eef2f1;
+        --muted: #64716a;
+        --border: #d9e2dc;
+        --code-blue: #2563eb;
+        --token-green: #18a058;
+        --warm-amber: #d97706;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(
+            circle at 15% 0%,
+            rgba(24, 160, 88, 0.11),
+            transparent 28rem
+          ),
+          linear-gradient(180deg, #fbfdfb 0%, var(--background) 42%, #edf4f0 100%);
+        color: var(--foreground);
+        font-family:
+          Pretendard, Inter, ui-sans-serif, system-ui, -apple-system,
+          BlinkMacSystemFont, "Segoe UI", sans-serif;
+        letter-spacing: 0;
+      }
+
+      main {
+        width: min(1440px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 28px 0 52px;
+      }
+
+      .page-header {
+        margin-bottom: 22px;
+      }
+
+      h1,
+      h2,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 28px;
+        font-weight: 950;
+      }
+
+      .note {
+        max-width: 780px;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.6;
+      }
+
+      .option {
+        margin-top: 22px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        padding: 22px;
+      }
+
+      .option-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+
+      .option-title h2 {
+        font-size: 22px;
+        font-weight: 950;
+      }
+
+      .badge {
+        border: 1px solid #a9c2ff;
+        border-radius: 999px;
+        background: #eef4ff;
+        color: var(--code-blue);
+        padding: 6px 12px;
+        font-size: 13px;
+        font-weight: 950;
+        white-space: nowrap;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        min-width: 960px;
+        table-layout: fixed;
+        border-collapse: separate;
+        border-spacing: 0;
+        text-align: left;
+        font-size: 14px;
+      }
+
+      col.device {
+        width: 12rem;
+      }
+
+      col.provider {
+        width: 7rem;
+      }
+
+      col.time {
+        width: 14rem;
+      }
+
+      col.small {
+        width: 5.5rem;
+      }
+
+      col.tokens {
+        width: 6.5rem;
+      }
+
+      th {
+        border-bottom: 1px solid var(--border);
+        padding: 10px 12px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 950;
+        text-transform: uppercase;
+      }
+
+      td {
+        border-bottom: 1px solid var(--border);
+        padding: 18px 12px;
+        vertical-align: middle;
+      }
+
+      .device-text {
+        display: block;
+        max-width: 10rem;
+        overflow: hidden;
+        color: var(--muted);
+        font-weight: 850;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .provider-text {
+        font-weight: 950;
+      }
+
+      .num {
+        text-align: right;
+        font-family:
+          "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace,
+          monospace;
+        font-weight: 950;
+        white-space: nowrap;
+      }
+
+      .mono {
+        font-family:
+          "SFMono-Regular", Consolas, "Liberation Mono", ui-monospace,
+          monospace;
+      }
+
+      .time-cell {
+        min-width: 0;
+      }
+
+      .time-rail {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr);
+        column-gap: 10px;
+        align-items: center;
+      }
+
+      .rail {
+        position: relative;
+        height: 54px;
+      }
+
+      .rail::before {
+        position: absolute;
+        top: 9px;
+        left: 7px;
+        width: 2px;
+        height: 36px;
+        border-radius: 999px;
+        background: var(--border);
+        content: "";
+      }
+
+      .dot {
+        position: absolute;
+        left: 3px;
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: var(--code-blue);
+      }
+
+      .dot.start {
+        top: 4px;
+      }
+
+      .dot.end {
+        bottom: 4px;
+        background: var(--token-green);
+      }
+
+      .rail-copy {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .rail-copy p {
+        display: flex;
+        min-width: 0;
+        align-items: baseline;
+        gap: 8px;
+        white-space: nowrap;
+      }
+
+      .rail-copy .label {
+        width: 34px;
+        flex: 0 0 auto;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 950;
+        text-transform: uppercase;
+      }
+
+      .rail-copy .value {
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 950;
+        text-overflow: ellipsis;
+      }
+
+      .trace-copy {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .trace-row {
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr) auto;
+        align-items: baseline;
+        gap: 7px;
+        white-space: nowrap;
+      }
+
+      .trace-label {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 950;
+        text-transform: uppercase;
+      }
+
+      .trace-time {
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 950;
+        text-overflow: ellipsis;
+      }
+
+      .trace-duration {
+        color: var(--code-blue);
+        font-size: 12px;
+        font-weight: 950;
+      }
+
+      .duration-stack {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .duration-main {
+        color: var(--foreground);
+        font-size: 18px;
+        font-weight: 950;
+        white-space: nowrap;
+      }
+
+      .duration-meta {
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr);
+        gap: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 850;
+        white-space: nowrap;
+      }
+
+      .duration-meta b {
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 950;
+        text-transform: uppercase;
+      }
+
+      .duration-meta span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .span-line {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 7px;
+      }
+
+      .span-times {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 950;
+        white-space: nowrap;
+      }
+
+      .track {
+        position: relative;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--surface-alt);
+      }
+
+      .track::before {
+        position: absolute;
+        top: 3px;
+        left: 8px;
+        right: 8px;
+        height: 2px;
+        border-radius: 999px;
+        background: var(--border);
+        content: "";
+      }
+
+      .track .tick {
+        position: absolute;
+        top: 0;
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--code-blue);
+      }
+
+      .track .tick:first-child {
+        left: 4px;
+      }
+
+      .track .tick:last-child {
+        right: 4px;
+        background: var(--token-green);
+      }
+
+      .span-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 850;
+        white-space: nowrap;
+      }
+
+      .bracket-stack {
+        display: grid;
+        grid-template-columns: 10px minmax(0, 1fr);
+        column-gap: 9px;
+        align-items: stretch;
+      }
+
+      .bracket {
+        position: relative;
+      }
+
+      .bracket::before {
+        position: absolute;
+        top: 8px;
+        bottom: 18px;
+        left: 3px;
+        width: 2px;
+        border-radius: 999px;
+        background: var(--border);
+        content: "";
+      }
+
+      .bracket::after {
+        position: absolute;
+        top: 8px;
+        left: 3px;
+        width: 8px;
+        height: 40px;
+        border-top: 2px solid var(--border);
+        border-bottom: 2px solid var(--border);
+        content: "";
+      }
+
+      .bracket-copy {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .bracket-row {
+        display: flex;
+        min-width: 0;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        white-space: nowrap;
+      }
+
+      .bracket-time {
+        overflow: hidden;
+        font-size: 13px;
+        font-weight: 950;
+        text-overflow: ellipsis;
+      }
+
+      .bracket-label {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 950;
+        text-transform: uppercase;
+      }
+
+      .bracket-foot {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 850;
+        white-space: nowrap;
+      }
+
+      @media (max-width: 720px) {
+        main {
+          width: min(100vw - 20px, 1440px);
+          padding-top: 18px;
+        }
+
+        .option {
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="page-header">
+        <h1>최근 세션 Time 컬럼 후보</h1>
+        <p class="note">
+          기존 C안의 명시적인 Start/End 타임라인은 유지하고, observability trace,
+          product analytics session table, audit log interval 패턴을 섞어 새 후보를
+          구성했습니다.
+        </p>
+      </div>
+
+      <section class="option">
+        <div class="option-title">
+          <h2>A. Start / End 타임라인</h2>
+          <span class="badge">기존 C 유지</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <colgroup>
+              <col class="device" />
+              <col class="provider" />
+              <col class="time" />
+              <col class="small" />
+              <col class="small" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>Provider</th>
+                <th>Time</th>
+                <th class="num">Prompts</th>
+                <th class="num">Calls</th>
+                <th class="num">Input</th>
+                <th class="num">Cache</th>
+                <th class="num">Output</th>
+                <th class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="device-text">Jeongtaekui-MacBookPro.local</span></td>
+                <td><span class="provider-text">Codex</span></td>
+                <td class="time-cell">
+                  <div class="time-rail">
+                    <div class="rail">
+                      <span class="dot start"></span>
+                      <span class="dot end"></span>
+                    </div>
+                    <div class="rail-copy">
+                      <p><span class="label">Start</span><span class="value mono">06.02 PM01:58</span></p>
+                      <p><span class="label">End</span><span class="value mono">06.03 PM08:35</span></p>
+                    </div>
+                  </div>
+                </td>
+                <td class="num">216</td>
+                <td class="num">1,788</td>
+                <td class="num">6.7M</td>
+                <td class="num">225.1M</td>
+                <td class="num">815K</td>
+                <td class="num">232.6M</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="option">
+        <div class="option-title">
+          <h2>B. Trace Rail + Duration</h2>
+          <span class="badge">recommended</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <colgroup>
+              <col class="device" />
+              <col class="provider" />
+              <col class="time" />
+              <col class="small" />
+              <col class="small" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>Provider</th>
+                <th>Time</th>
+                <th class="num">Prompts</th>
+                <th class="num">Calls</th>
+                <th class="num">Input</th>
+                <th class="num">Cache</th>
+                <th class="num">Output</th>
+                <th class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="device-text">Jeongtaekui-MacBookPro.local</span></td>
+                <td><span class="provider-text">Codex</span></td>
+                <td class="time-cell">
+                  <div class="time-rail">
+                    <div class="rail">
+                      <span class="dot start"></span>
+                      <span class="dot end"></span>
+                    </div>
+                    <div class="trace-copy">
+                      <div class="trace-row">
+                        <span class="trace-label">Start</span>
+                        <span class="trace-time mono">06.02 PM01:58</span>
+                        <span></span>
+                      </div>
+                      <div class="trace-row">
+                        <span class="trace-label">End</span>
+                        <span class="trace-time mono">06.03 PM08:35</span>
+                        <span class="trace-duration mono">30h37m</span>
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td class="num">216</td>
+                <td class="num">1,788</td>
+                <td class="num">6.7M</td>
+                <td class="num">225.1M</td>
+                <td class="num">815K</td>
+                <td class="num">232.6M</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="option">
+        <div class="option-title">
+          <h2>C. Duration Ladder</h2>
+          <span class="badge">duration first</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <colgroup>
+              <col class="device" />
+              <col class="provider" />
+              <col class="time" />
+              <col class="small" />
+              <col class="small" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>Provider</th>
+                <th>Time</th>
+                <th class="num">Prompts</th>
+                <th class="num">Calls</th>
+                <th class="num">Input</th>
+                <th class="num">Cache</th>
+                <th class="num">Output</th>
+                <th class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="device-text">Jeongtaekui-MacBookPro.local</span></td>
+                <td><span class="provider-text">Codex</span></td>
+                <td class="time-cell">
+                  <div class="duration-stack">
+                    <div class="duration-main mono">30h 37m</div>
+                    <div class="duration-meta">
+                      <b>Start</b>
+                      <span class="mono">06.02 PM01:58</span>
+                      <b>End</b>
+                      <span class="mono">06.03 PM08:35</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="num">216</td>
+                <td class="num">1,788</td>
+                <td class="num">6.7M</td>
+                <td class="num">225.1M</td>
+                <td class="num">815K</td>
+                <td class="num">232.6M</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="option">
+        <div class="option-title">
+          <h2>D. Horizontal Session Span</h2>
+          <span class="badge">scan line</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <colgroup>
+              <col class="device" />
+              <col class="provider" />
+              <col class="time" />
+              <col class="small" />
+              <col class="small" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>Provider</th>
+                <th>Time</th>
+                <th class="num">Prompts</th>
+                <th class="num">Calls</th>
+                <th class="num">Input</th>
+                <th class="num">Cache</th>
+                <th class="num">Output</th>
+                <th class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="device-text">Jeongtaekui-MacBookPro.local</span></td>
+                <td><span class="provider-text">Codex</span></td>
+                <td class="time-cell">
+                  <div class="span-line">
+                    <div class="span-times mono">
+                      <span>PM01:58</span>
+                      <span>PM08:35</span>
+                    </div>
+                    <div class="track">
+                      <span class="tick"></span>
+                      <span class="tick"></span>
+                    </div>
+                    <div class="span-foot">
+                      <span>06.02 -> 06.03</span>
+                      <span class="mono">30h37m</span>
+                    </div>
+                  </div>
+                </td>
+                <td class="num">216</td>
+                <td class="num">1,788</td>
+                <td class="num">6.7M</td>
+                <td class="num">225.1M</td>
+                <td class="num">815K</td>
+                <td class="num">232.6M</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="option">
+        <div class="option-title">
+          <h2>E. Bracketed Endpoint Stack</h2>
+          <span class="badge">audit log</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <colgroup>
+              <col class="device" />
+              <col class="provider" />
+              <col class="time" />
+              <col class="small" />
+              <col class="small" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>Provider</th>
+                <th>Time</th>
+                <th class="num">Prompts</th>
+                <th class="num">Calls</th>
+                <th class="num">Input</th>
+                <th class="num">Cache</th>
+                <th class="num">Output</th>
+                <th class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="device-text">Jeongtaekui-MacBookPro.local</span></td>
+                <td><span class="provider-text">Codex</span></td>
+                <td class="time-cell">
+                  <div class="bracket-stack">
+                    <div class="bracket"></div>
+                    <div class="bracket-copy">
+                      <div class="bracket-row">
+                        <span class="bracket-time mono">06.02 PM01:58</span>
+                        <span class="bracket-label">Start</span>
+                      </div>
+                      <div class="bracket-row">
+                        <span class="bracket-time mono">06.03 PM08:35</span>
+                        <span class="bracket-label">End</span>
+                      </div>
+                      <div class="bracket-foot">
+                        <span class="mono">30h37m</span> session span
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td class="num">216</td>
+                <td class="num">1,788</td>
+                <td class="num">6.7M</td>
+                <td class="num">225.1M</td>
+                <td class="num">815K</td>
+                <td class="num">232.6M</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </body>
+</html>

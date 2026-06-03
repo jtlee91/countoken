@@ -51,7 +51,14 @@ type syncResult struct {
 }
 
 type syncPayload struct {
+	Device   remoteDeviceItem    `json:"device"`
 	Sessions []remoteSessionItem `json:"sessions"`
+}
+
+type remoteDeviceItem struct {
+	DeviceID    string `json:"device_id"`
+	DeviceLabel string `json:"device_label"`
+	Platform    string `json:"platform"`
 }
 
 type remoteSessionItem struct {
@@ -107,23 +114,23 @@ func runInspect(args []string, stdout io.Writer) error {
 	var result inspectResult
 	switch *provider {
 	case "":
-		codexResult, err := inspectProvider("codex", *codexSessions, *stateDir, codex.ParseSessionFile, codex.ErrNoTokenCounts)
+		codexResult, err := inspectProvider("codex", *codexSessions, *stateDir, codex.ParseSessionUsage, codex.ErrNoTokenCounts)
 		if err != nil {
 			return err
 		}
-		claudeResult, err := inspectProvider("claude", *claudeProjects, *stateDir, claude.ParseSessionFile, claude.ErrNoUsage)
+		claudeResult, err := inspectProvider("claude", *claudeProjects, *stateDir, claude.ParseSessionUsage, claude.ErrNoUsage)
 		if err != nil {
 			return err
 		}
 		result = mergeInspectResults(codexResult, claudeResult)
 	case "codex":
-		codexResult, err := inspectProvider("codex", *codexSessions, *stateDir, codex.ParseSessionFile, codex.ErrNoTokenCounts)
+		codexResult, err := inspectProvider("codex", *codexSessions, *stateDir, codex.ParseSessionUsage, codex.ErrNoTokenCounts)
 		if err != nil {
 			return err
 		}
 		result = codexResult
 	case "claude":
-		claudeResult, err := inspectProvider("claude", *claudeProjects, *stateDir, claude.ParseSessionFile, claude.ErrNoUsage)
+		claudeResult, err := inspectProvider("claude", *claudeProjects, *stateDir, claude.ParseSessionUsage, claude.ErrNoUsage)
 		if err != nil {
 			return err
 		}
@@ -191,12 +198,16 @@ func runLogin(args []string, stdout io.Writer) error {
 	if err := saveAuthState(authPath(*stateDir), auth); err != nil {
 		return err
 	}
+	store, err := state.Open(filepath.Join(*stateDir, "usage.sqlite"))
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+	device, err := store.EnsureLocalDevice(ctx)
+	if err != nil {
+		return err
+	}
 	if shouldMarkAllSessionsPendingAfterLogin(previousAuth, previousAuthErr, auth) {
-		store, err := state.Open(filepath.Join(*stateDir, "usage.sqlite"))
-		if err != nil {
-			return err
-		}
-		defer store.Close()
 		if err := store.MarkAllSessionsPendingSync(ctx); err != nil {
 			return err
 		}
@@ -207,8 +218,11 @@ func runLogin(args []string, stdout io.Writer) error {
 	encoder := json.NewEncoder(stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(map[string]any{
-		"logged_in": true,
-		"user_id":   auth.UserID,
+		"logged_in":    true,
+		"user_id":      auth.UserID,
+		"device_id":    device.DeviceID,
+		"device_label": device.DeviceLabel,
+		"platform":     device.Platform,
 	})
 }
 
@@ -243,6 +257,10 @@ func runSync(args []string, stdout io.Writer) error {
 	defer store.Close()
 
 	ctx := context.Background()
+	device, err := store.EnsureLocalDevice(ctx)
+	if err != nil {
+		return err
+	}
 	sessions, err := store.ListPendingSessions(ctx)
 	if err != nil {
 		return err
@@ -267,7 +285,7 @@ func runSync(args []string, stdout io.Writer) error {
 		resolvedEndpoint = defaultSyncEndpoint
 	}
 
-	payload := buildSyncPayload(sessions)
+	payload := buildSyncPayload(device, sessions)
 	if err := postSyncPayload(ctx, resolvedEndpoint, resolvedToken, payload); err != nil {
 		return err
 	}
@@ -297,8 +315,13 @@ func getenvDefault(name string, fallback string) string {
 	return fallback
 }
 
-func buildSyncPayload(sessions []state.SessionRow) syncPayload {
+func buildSyncPayload(device state.LocalDevice, sessions []state.SessionRow) syncPayload {
 	payload := syncPayload{
+		Device: remoteDeviceItem{
+			DeviceID:    device.DeviceID,
+			DeviceLabel: device.DeviceLabel,
+			Platform:    device.Platform,
+		},
 		Sessions: make([]remoteSessionItem, 0, len(sessions)),
 	}
 	for _, session := range sessions {
@@ -347,7 +370,7 @@ func postSyncPayload(ctx context.Context, endpoint string, token string, payload
 	return nil
 }
 
-type sessionParser func(path string) (usage.SessionSummary, error)
+type sessionParser func(path string) (usage.SessionUsage, error)
 
 func inspectProvider(provider string, root string, stateDir string, parseSession sessionParser, skipErr error) (inspectResult, error) {
 	paths, err := jsonlFiles(root)
@@ -372,7 +395,7 @@ func inspectProvider(provider string, root string, stateDir string, parseSession
 		key := fileKey(path)
 		if cached, ok, err := store.SourceFile(ctx, provider, key); err != nil {
 			return inspectResult{}, err
-		} else if ok && cached.SizeBytes == metadata.SizeBytes && cached.ModifiedAt == metadata.ModifiedAt {
+		} else if ok && cached.SizeBytes == metadata.SizeBytes && cached.ModifiedAt == metadata.ModifiedAt && cached.HasUsageCalls {
 			result.FilesReused++
 			result.Sessions = append(result.Sessions, inspectSessionSummary{
 				Provider:       provider,
@@ -381,7 +404,7 @@ func inspectProvider(provider string, root string, stateDir string, parseSession
 			continue
 		}
 
-		summary, err := parseSession(path)
+		parsed, err := parseSession(path)
 		if err != nil {
 			if errors.Is(err, skipErr) {
 				result.FilesSkipped++
@@ -395,9 +418,9 @@ func inspectProvider(provider string, root string, stateDir string, parseSession
 		result.FilesParsed++
 		result.Sessions = append(result.Sessions, inspectSessionSummary{
 			Provider:       provider,
-			SessionSummary: summary,
+			SessionSummary: parsed.Summary,
 		})
-		if err := store.UpsertSourceFile(ctx, provider, key, metadata.SizeBytes, metadata.ModifiedAt, summary); err != nil {
+		if err := store.UpsertParsedSourceFile(ctx, provider, key, metadata.SizeBytes, metadata.ModifiedAt, parsed); err != nil {
 			return inspectResult{}, err
 		}
 	}

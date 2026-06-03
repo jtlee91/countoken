@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ var ErrNoTokenCounts = errors.New("codex session contains no token_count events"
 var kst = time.FixedZone("KST", 9*60*60)
 
 type SessionSummary = usage.SessionSummary
+type SessionUsage = usage.SessionUsage
 type TokenSummary = usage.TokenSummary
 
 type record struct {
@@ -29,10 +31,12 @@ type eventPayload struct {
 	Type            string          `json:"type"`
 	Info            *tokenInfo      `json:"info"`
 	TotalTokenUsage json.RawMessage `json:"total_token_usage"`
+	LastTokenUsage  json.RawMessage `json:"last_token_usage"`
 }
 
 type tokenInfo struct {
 	TotalTokenUsage json.RawMessage `json:"total_token_usage"`
+	LastTokenUsage  json.RawMessage `json:"last_token_usage"`
 }
 
 type sessionPayload struct {
@@ -48,14 +52,25 @@ type tokenUsage struct {
 }
 
 func ParseSessionFile(path string) (SessionSummary, error) {
-	file, err := os.Open(path)
+	parsed, err := ParseSessionUsage(path)
 	if err != nil {
 		return SessionSummary{}, err
+	}
+	return parsed.Summary, nil
+}
+
+func ParseSessionUsage(path string) (SessionUsage, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return SessionUsage{}, err
 	}
 	defer file.Close()
 
 	var summary SessionSummary
 	var rawSessionID string
+	var calls []usage.UsageCall
+	var previousTotal tokenUsage
+	var hasPreviousTotal bool
 
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 1024), 64*1024*1024)
@@ -67,58 +82,75 @@ func ParseSessionFile(path string) (SessionSummary, error) {
 
 		var current record
 		if err := json.Unmarshal([]byte(line), &current); err != nil {
-			return SessionSummary{}, fmt.Errorf("parse jsonl record: %w", err)
+			return SessionUsage{}, fmt.Errorf("parse jsonl record: %w", err)
 		}
 
 		switch current.Type {
 		case "session_meta":
 			id, err := readSessionID(current.Payload)
 			if err != nil {
-				return SessionSummary{}, err
+				return SessionUsage{}, err
 			}
 			rawSessionID = id
 		case "event_msg":
-			eventType, usage, hasUsage, err := readEventPayload(current.Payload)
+			eventType, totalUsage, lastUsage, hasTotalUsage, hasLastUsage, err := readEventPayload(current.Payload)
 			if err != nil {
-				return SessionSummary{}, err
+				return SessionUsage{}, err
 			}
 			switch eventType {
 			case "user_message":
 				summary.UserTurnCount++
 			case "token_count":
-				if !hasUsage {
+				if !hasTotalUsage {
 					continue
 				}
 				timestamp, err := formatKST(current.Timestamp)
 				if err != nil {
-					return SessionSummary{}, err
+					return SessionUsage{}, err
 				}
+				callUsage := callTokenUsage(totalUsage, previousTotal, hasPreviousTotal, lastUsage, hasLastUsage)
+				previousTotal = totalUsage
+				hasPreviousTotal = true
+
 				if summary.StartedAt == "" {
 					summary.StartedAt = timestamp
 				}
 				summary.EndedAt = timestamp
 				summary.LLMCallCount++
-				summary.Tokens = TokenSummary{
-					Input:     uncachedInputTokens(usage),
-					Output:    usage.OutputTokens,
-					Cache:     usage.CachedInputTokens,
-					Reasoning: usage.ReasoningOutputTokens,
-					Total:     usage.TotalTokens,
-				}
+				tokens := tokenSummary(callUsage)
+				summary.Tokens.Input += tokens.Input
+				summary.Tokens.Output += tokens.Output
+				summary.Tokens.Cache += tokens.Cache
+				summary.Tokens.Reasoning += tokens.Reasoning
+				summary.Tokens.Total += tokens.Total
+				calls = append(calls, usage.UsageCall{
+					CallIndex:  summary.LLMCallCount,
+					OccurredAt: timestamp,
+					Tokens:     tokens,
+				})
 			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return SessionSummary{}, err
+		return SessionUsage{}, err
 	}
 	if summary.LLMCallCount == 0 {
-		return SessionSummary{}, ErrNoTokenCounts
+		return SessionUsage{}, ErrNoTokenCounts
+	}
+	if rawSessionID == "" {
+		rawSessionID = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 	}
 	if rawSessionID != "" {
 		summary.SessionHash = hashSessionID(rawSessionID)
 	}
 
-	return summary, nil
+	for index := range calls {
+		calls[index].CallKey = usage.HashCallKey("codex", summary.SessionHash, calls[index].OccurredAt, fmt.Sprintf("%d", calls[index].CallIndex))
+	}
+	return SessionUsage{
+		Summary: summary,
+		Calls:   calls,
+	}, nil
 }
 
 func readSessionID(raw json.RawMessage) (string, error) {
@@ -129,13 +161,13 @@ func readSessionID(raw json.RawMessage) (string, error) {
 	return strings.TrimSpace(payload.ID), nil
 }
 
-func readEventPayload(raw json.RawMessage) (string, tokenUsage, bool, error) {
+func readEventPayload(raw json.RawMessage) (string, tokenUsage, tokenUsage, bool, bool, error) {
 	var payload eventPayload
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return "", tokenUsage{}, false, fmt.Errorf("parse event_msg payload: %w", err)
+		return "", tokenUsage{}, tokenUsage{}, false, false, fmt.Errorf("parse event_msg payload: %w", err)
 	}
 	if payload.Type != "token_count" {
-		return payload.Type, tokenUsage{}, false, nil
+		return payload.Type, tokenUsage{}, tokenUsage{}, false, false, nil
 	}
 	var totalUsageRaw json.RawMessage
 	if payload.Info != nil && len(payload.Info.TotalTokenUsage) > 0 {
@@ -144,13 +176,61 @@ func readEventPayload(raw json.RawMessage) (string, tokenUsage, bool, error) {
 		totalUsageRaw = payload.TotalTokenUsage
 	}
 	if len(totalUsageRaw) == 0 {
-		return payload.Type, tokenUsage{}, false, nil
+		return payload.Type, tokenUsage{}, tokenUsage{}, false, false, nil
 	}
-	var usage tokenUsage
-	if err := json.Unmarshal(totalUsageRaw, &usage); err != nil {
-		return payload.Type, tokenUsage{}, false, fmt.Errorf("parse total_token_usage: %w", err)
+	var totalUsage tokenUsage
+	if err := json.Unmarshal(totalUsageRaw, &totalUsage); err != nil {
+		return payload.Type, tokenUsage{}, tokenUsage{}, false, false, fmt.Errorf("parse total_token_usage: %w", err)
 	}
-	return payload.Type, usage, true, nil
+
+	var lastUsageRaw json.RawMessage
+	if payload.Info != nil && len(payload.Info.LastTokenUsage) > 0 {
+		lastUsageRaw = payload.Info.LastTokenUsage
+	} else if len(payload.LastTokenUsage) > 0 {
+		lastUsageRaw = payload.LastTokenUsage
+	}
+	if len(lastUsageRaw) == 0 {
+		return payload.Type, totalUsage, tokenUsage{}, true, false, nil
+	}
+	var lastUsage tokenUsage
+	if err := json.Unmarshal(lastUsageRaw, &lastUsage); err != nil {
+		return payload.Type, tokenUsage{}, tokenUsage{}, false, false, fmt.Errorf("parse last_token_usage: %w", err)
+	}
+	return payload.Type, totalUsage, lastUsage, true, true, nil
+}
+
+func callTokenUsage(totalUsage tokenUsage, previousTotal tokenUsage, hasPreviousTotal bool, lastUsage tokenUsage, hasLastUsage bool) tokenUsage {
+	if hasLastUsage {
+		return lastUsage
+	}
+	if !hasPreviousTotal {
+		return totalUsage
+	}
+	return tokenUsage{
+		InputTokens:           nonNegativeDelta(totalUsage.InputTokens, previousTotal.InputTokens),
+		CachedInputTokens:     nonNegativeDelta(totalUsage.CachedInputTokens, previousTotal.CachedInputTokens),
+		OutputTokens:          nonNegativeDelta(totalUsage.OutputTokens, previousTotal.OutputTokens),
+		ReasoningOutputTokens: nonNegativeDelta(totalUsage.ReasoningOutputTokens, previousTotal.ReasoningOutputTokens),
+		TotalTokens:           nonNegativeDelta(totalUsage.TotalTokens, previousTotal.TotalTokens),
+	}
+}
+
+func tokenSummary(usage tokenUsage) TokenSummary {
+	return TokenSummary{
+		Input:     uncachedInputTokens(usage),
+		Output:    usage.OutputTokens,
+		Cache:     usage.CachedInputTokens,
+		Reasoning: usage.ReasoningOutputTokens,
+		Total:     usage.TotalTokens,
+	}
+}
+
+func nonNegativeDelta(current int, previous int) int {
+	delta := current - previous
+	if delta < 0 {
+		return 0
+	}
+	return delta
 }
 
 func uncachedInputTokens(usage tokenUsage) int {

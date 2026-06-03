@@ -19,6 +19,7 @@ var ErrNoUsage = errors.New("claude session contains no usage entries")
 var kst = time.FixedZone("KST", 9*60*60)
 
 type SessionSummary = usage.SessionSummary
+type SessionUsage = usage.SessionUsage
 type TokenSummary = usage.TokenSummary
 
 type record struct {
@@ -55,13 +56,22 @@ type usageEntry struct {
 	MessageID   string
 	RequestID   string
 	IsSidechain bool
+	Model       string
 	Usage       tokenUsage
 }
 
 func ParseSessionFile(path string) (SessionSummary, error) {
-	file, err := os.Open(path)
+	parsed, err := ParseSessionUsage(path)
 	if err != nil {
 		return SessionSummary{}, err
+	}
+	return parsed.Summary, nil
+}
+
+func ParseSessionUsage(path string) (SessionUsage, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return SessionUsage{}, err
 	}
 	defer file.Close()
 
@@ -83,7 +93,7 @@ func ParseSessionFile(path string) (SessionSummary, error) {
 
 		var current record
 		if err := json.Unmarshal([]byte(line), &current); err != nil {
-			return SessionSummary{}, fmt.Errorf("parse jsonl record: %w", err)
+			return SessionUsage{}, fmt.Errorf("parse jsonl record: %w", err)
 		}
 		if rawSessionID == "" {
 			rawSessionID = strings.TrimSpace(current.SessionID)
@@ -100,7 +110,7 @@ func ParseSessionFile(path string) (SessionSummary, error) {
 
 		timestamp, err := time.Parse(time.RFC3339Nano, current.Timestamp)
 		if err != nil {
-			return SessionSummary{}, fmt.Errorf("parse timestamp: %w", err)
+			return SessionUsage{}, fmt.Errorf("parse timestamp: %w", err)
 		}
 		if startedAt.IsZero() || timestamp.Before(startedAt) {
 			startedAt = timestamp
@@ -115,14 +125,15 @@ func ParseSessionFile(path string) (SessionSummary, error) {
 			MessageID:   strings.TrimSpace(current.Message.ID),
 			RequestID:   strings.TrimSpace(current.RequestID),
 			IsSidechain: current.IsSidechain,
+			Model:       strings.TrimSpace(current.Message.Model),
 			Usage:       *current.Message.Usage,
 		})
 	}
 	if err := scanner.Err(); err != nil {
-		return SessionSummary{}, err
+		return SessionUsage{}, err
 	}
 	if len(usageEntries) == 0 {
-		return SessionSummary{}, ErrNoUsage
+		return SessionUsage{}, ErrNoUsage
 	}
 
 	deduped := dedupeUsageEntries(usageEntries)
@@ -130,20 +141,35 @@ func ParseSessionFile(path string) (SessionSummary, error) {
 	summary.EndedAt = formatKST(endedAt)
 	summary.LLMCallCount = len(deduped)
 	summary.UserTurnCount = linkedUserPromptCount(deduped, recordsByUUID, userPromptCount)
-	for _, entry := range deduped {
-		summary.Tokens.Input += entry.Usage.InputTokens
-		summary.Tokens.Output += entry.Usage.OutputTokens
-		summary.Tokens.Cache += entry.Usage.CacheCreationInputTokens + entry.Usage.CacheReadInputTokens
+	calls := make([]usage.UsageCall, 0, len(deduped))
+	for index, entry := range deduped {
+		tokens := tokenSummary(entry.Usage)
+		summary.Tokens.Input += tokens.Input
+		summary.Tokens.Output += tokens.Output
+		summary.Tokens.Cache += tokens.Cache
+		summary.Tokens.Total += tokens.Total
+		calls = append(calls, usage.UsageCall{
+			CallIndex:  index + 1,
+			OccurredAt: formatKST(entry.Timestamp),
+			Model:      entry.Model,
+			Tokens:     tokens,
+		})
 	}
-	summary.Tokens.Total = summary.Tokens.Input + summary.Tokens.Output + summary.Tokens.Cache
 	if rawSessionID == "" {
 		rawSessionID = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 	}
 	if rawSessionID != "" {
 		summary.SessionHash = hashSessionID(rawSessionID)
 	}
+	for index := range calls {
+		entry := deduped[index]
+		calls[index].CallKey = usage.HashCallKey("claude", summary.SessionHash, entry.RequestID, entry.MessageID, entry.UUID, fmt.Sprintf("%d", calls[index].CallIndex))
+	}
 
-	return summary, nil
+	return SessionUsage{
+		Summary: summary,
+		Calls:   calls,
+	}, nil
 }
 
 func linkedUserPromptCount(entries []usageEntry, recordsByUUID map[string]record, fallbackUserPromptCount int) int {
@@ -261,6 +287,16 @@ func shouldReplaceUsageEntry(candidate usageEntry, existing usageEntry) bool {
 
 func usageTotal(usage tokenUsage) int {
 	return usage.InputTokens + usage.OutputTokens + usage.CacheCreationInputTokens + usage.CacheReadInputTokens
+}
+
+func tokenSummary(usage tokenUsage) TokenSummary {
+	cache := usage.CacheCreationInputTokens + usage.CacheReadInputTokens
+	return TokenSummary{
+		Input:  usage.InputTokens,
+		Output: usage.OutputTokens,
+		Cache:  cache,
+		Total:  usage.InputTokens + usage.OutputTokens + cache,
+	}
 }
 
 func hashSessionID(value string) string {

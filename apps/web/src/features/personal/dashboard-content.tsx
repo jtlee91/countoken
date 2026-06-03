@@ -39,25 +39,25 @@ function SessionTimeCell({
       className="grid min-w-0 grid-cols-[14px_minmax(0,1fr)] items-center gap-2"
       title={formatSessionTime(startedAt, endedAt)}
     >
-      <div className="relative h-[50px]">
-        <span className="absolute left-[6px] top-[8px] h-[34px] w-px rounded-full bg-border" />
+      <div className="relative h-[54px]">
+        <span className="absolute left-[6px] top-[9px] h-9 w-px rounded-full bg-border" />
         <span className="absolute left-[2px] top-[4px] h-2.5 w-2.5 rounded-full bg-code-blue" />
         <span className="absolute bottom-[4px] left-[2px] h-2.5 w-2.5 rounded-full bg-token-green" />
       </div>
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <div className="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
-          <span className="w-9 shrink-0 text-[10px] font-black uppercase text-muted">
+      <div className="relative h-[54px] min-w-0">
+        <div className="absolute left-0 right-0 top-[1px] flex h-4 min-w-0 items-center gap-2 whitespace-nowrap">
+          <span className="w-9 shrink-0 text-[10px] font-black uppercase leading-none text-muted">
             Start
           </span>
-          <span className="truncate font-mono text-[11px] font-black text-muted">
+          <span className="truncate font-mono text-[11px] font-black leading-none text-muted">
             {formatDateTime(startedAt)}
           </span>
         </div>
-        <div className="flex min-w-0 items-baseline gap-2 whitespace-nowrap">
-          <span className="w-9 shrink-0 text-[10px] font-black uppercase text-muted">
+        <div className="absolute bottom-[1px] left-0 right-0 flex h-4 min-w-0 items-center gap-2 whitespace-nowrap">
+          <span className="w-9 shrink-0 text-[10px] font-black uppercase leading-none text-muted">
             End
           </span>
-          <span className="truncate font-mono text-[11px] font-black text-muted">
+          <span className="truncate font-mono text-[11px] font-black leading-none text-muted">
             {formatDateTime(endedAt)}
           </span>
         </div>

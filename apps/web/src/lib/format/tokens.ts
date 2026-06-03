@@ -29,5 +29,5 @@ export function tokenSharePercent(value: number, total: number) {
 }
 
 export function formatTokenSharePercent(value: number, total: number) {
-  return tokenSharePercent(value, total).toFixed(1);
+  return Math.round(tokenSharePercent(value, total)).toString();
 }

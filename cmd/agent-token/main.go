@@ -144,6 +144,10 @@ func runLogin(args []string, stdout io.Writer) error {
 	supabaseURL := flags.String("supabase-url", getenvDefault("TOKEN_AGENT_SUPABASE_URL", defaultSupabaseURL), "Supabase project URL")
 	anonKey := flags.String("anon-key", getenvDefault("TOKEN_AGENT_SUPABASE_ANON_KEY", defaultAnonKey), "Supabase anon key")
 	syncEndpoint := flags.String("sync-endpoint", getenvDefault("TOKEN_AGENT_SYNC_ENDPOINT", defaultSyncEndpoint), "sync endpoint URL")
+	provider := flags.String("provider", "google", "OAuth provider for browser login")
+	callbackAddress := flags.String("callback-address", getenvDefault("TOKEN_AGENT_CALLBACK_ADDRESS", defaultCallbackAddress), "local OAuth callback address")
+	loginTimeout := flags.Duration("timeout", 5*time.Minute, "OAuth login timeout")
+	noBrowser := flags.Bool("no-browser", false, "print OAuth URL without opening a browser")
 	email := flags.String("email", os.Getenv("TOKEN_AGENT_EMAIL"), "Supabase Auth email")
 	password := flags.String("password", "", "Supabase Auth password")
 	passwordEnv := flags.String("password-env", "TOKEN_AGENT_PASSWORD", "environment variable containing the Supabase Auth password")
@@ -151,21 +155,51 @@ func runLogin(args []string, stdout io.Writer) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if *email == "" {
-		return errors.New("login requires --email")
-	}
-	resolvedPassword, err := passwordFromOptions(*password, *passwordEnv)
-	if err != nil {
-		return err
-	}
 
-	token, err := passwordLogin(context.Background(), *supabaseURL, *anonKey, *email, resolvedPassword)
-	if err != nil {
-		return err
+	ctx := context.Background()
+	previousAuth, previousAuthErr := loadAuthState(authPath(*stateDir))
+	var token authTokenResponse
+	if *email != "" {
+		resolvedPassword, err := passwordFromOptions(*password, *passwordEnv)
+		if err != nil {
+			return err
+		}
+		token, err = passwordLogin(ctx, *supabaseURL, *anonKey, *email, resolvedPassword)
+		if err != nil {
+			return err
+		}
+	} else {
+		oauthStdout := stdout
+		if *quiet {
+			oauthStdout = io.Discard
+		}
+		var err error
+		token, err = googleOAuthLogin(ctx, oauthLoginOptions{
+			SupabaseURL:     *supabaseURL,
+			AnonKey:         *anonKey,
+			Provider:        *provider,
+			CallbackAddress: *callbackAddress,
+			Timeout:         *loginTimeout,
+			OpenBrowser:     !*noBrowser,
+			Stdout:          oauthStdout,
+		})
+		if err != nil {
+			return err
+		}
 	}
 	auth := authFromTokenResponse(*supabaseURL, *anonKey, *syncEndpoint, token)
 	if err := saveAuthState(authPath(*stateDir), auth); err != nil {
 		return err
+	}
+	if shouldMarkAllSessionsPendingAfterLogin(previousAuth, previousAuthErr, auth) {
+		store, err := state.Open(filepath.Join(*stateDir, "usage.sqlite"))
+		if err != nil {
+			return err
+		}
+		defer store.Close()
+		if err := store.MarkAllSessionsPendingSync(ctx); err != nil {
+			return err
+		}
 	}
 	if *quiet {
 		return nil
@@ -176,6 +210,19 @@ func runLogin(args []string, stdout io.Writer) error {
 		"logged_in": true,
 		"user_id":   auth.UserID,
 	})
+}
+
+func shouldMarkAllSessionsPendingAfterLogin(previous authState, previousErr error, next authState) bool {
+	if next.UserID == "" {
+		return false
+	}
+	if previousErr != nil {
+		return true
+	}
+	if previous.UserID == "" {
+		return true
+	}
+	return previous.UserID != next.UserID
 }
 
 func runSync(args []string, stdout io.Writer) error {

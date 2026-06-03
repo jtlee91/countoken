@@ -3,24 +3,33 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
 
 const (
-	defaultSupabaseURL  = "https://ybecqmpsrgvgpfdtkivx.supabase.co"
-	defaultSyncEndpoint = defaultSupabaseURL + "/functions/v1/sync-usage"
-	defaultAnonKey      = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliZWNxbXBzcmd2Z3BmZHRraXZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTAzOTIsImV4cCI6MjA5NTk2NjM5Mn0.4NagtLAwQ2trYyipqg4MzghvCMNynlHHfdsNBdrmcqs"
+	defaultSupabaseURL     = "https://ybecqmpsrgvgpfdtkivx.supabase.co"
+	defaultSyncEndpoint    = defaultSupabaseURL + "/functions/v1/sync-usage"
+	defaultAnonKey         = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InliZWNxbXBzcmd2Z3BmZHRraXZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzOTAzOTIsImV4cCI6MjA5NTk2NjM5Mn0.4NagtLAwQ2trYyipqg4MzghvCMNynlHHfdsNBdrmcqs"
+	defaultCallbackAddress = "127.0.0.1:8787"
 )
 
 var authHTTPClient = http.DefaultClient
+var openBrowserURL = openSystemBrowser
 
 type authState struct {
 	SupabaseURL  string `json:"supabase_url"`
@@ -43,6 +52,16 @@ type authTokenResponse struct {
 	Error            string `json:"error"`
 	ErrorDescription string `json:"error_description"`
 	Msg              string `json:"msg"`
+}
+
+type oauthLoginOptions struct {
+	SupabaseURL     string
+	AnonKey         string
+	Provider        string
+	CallbackAddress string
+	Timeout         time.Duration
+	OpenBrowser     bool
+	Stdout          io.Writer
 }
 
 func authPath(stateDir string) string {
@@ -97,9 +116,83 @@ func passwordLogin(ctx context.Context, supabaseURL string, anonKey string, emai
 	})
 }
 
+func googleOAuthLogin(ctx context.Context, options oauthLoginOptions) (authTokenResponse, error) {
+	if options.Provider == "" {
+		options.Provider = "google"
+	}
+	if options.Provider != "google" {
+		return authTokenResponse{}, fmt.Errorf("unsupported OAuth provider %q: expected google", options.Provider)
+	}
+	if options.CallbackAddress == "" {
+		options.CallbackAddress = defaultCallbackAddress
+	}
+	if options.Timeout <= 0 {
+		options.Timeout = 5 * time.Minute
+	}
+	if options.Stdout == nil {
+		options.Stdout = io.Discard
+	}
+
+	listener, err := net.Listen("tcp", options.CallbackAddress)
+	if err != nil {
+		return authTokenResponse{}, fmt.Errorf("start OAuth callback listener: %w", err)
+	}
+	defer listener.Close()
+
+	callbackURL := "http://" + listener.Addr().String() + "/auth/callback"
+	codeVerifier, codeChallenge, err := generatePKCEPair()
+	if err != nil {
+		return authTokenResponse{}, err
+	}
+	loginURL := buildOAuthAuthorizeURL(options.SupabaseURL, options.Provider, callbackURL, codeChallenge)
+
+	codeCh := make(chan string, 1)
+	errCh := make(chan error, 1)
+	server := &http.Server{
+		Handler: oauthCallbackHandler(codeCh, errCh),
+	}
+	go func() {
+		if serveErr := server.Serve(listener); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			errCh <- serveErr
+		}
+	}()
+	defer server.Close()
+
+	fmt.Fprintf(options.Stdout, "Open this URL in your browser:\n%s\n\n", loginURL)
+	if options.OpenBrowser {
+		if err := openBrowserURL(loginURL); err != nil {
+			fmt.Fprintf(options.Stdout, "Could not open browser automatically: %v\n", err)
+		}
+	}
+	fmt.Fprintln(options.Stdout, "Waiting for Google login...")
+
+	waitCtx, cancel := context.WithTimeout(ctx, options.Timeout)
+	defer cancel()
+	var authCode string
+	select {
+	case authCode = <-codeCh:
+	case err := <-errCh:
+		return authTokenResponse{}, fmt.Errorf("OAuth callback failed: %w", err)
+	case <-waitCtx.Done():
+		return authTokenResponse{}, fmt.Errorf("OAuth login timed out after %s", options.Timeout)
+	}
+
+	if err := server.Close(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return authTokenResponse{}, err
+	}
+	return pkceLogin(ctx, options.SupabaseURL, options.AnonKey, authCode, codeVerifier)
+}
+
 func refreshLogin(ctx context.Context, auth authState) (authTokenResponse, error) {
 	return requestToken(ctx, auth.SupabaseURL, auth.AnonKey, "refresh_token", map[string]string{
 		"refresh_token": auth.RefreshToken,
+	})
+}
+
+func pkceLogin(ctx context.Context, supabaseURL string, anonKey string, authCode string, codeVerifier string) (authTokenResponse, error) {
+	return requestToken(ctx, supabaseURL, anonKey, "pkce", map[string]string{
+		"auth_code":     authCode,
+		"code_verifier": codeVerifier,
 	})
 }
 
@@ -199,4 +292,73 @@ func ensureFreshAuth(ctx context.Context, path string, refreshBefore time.Durati
 		return authState{}, err
 	}
 	return refreshed, nil
+}
+
+func oauthCallbackHandler(codeCh chan<- string, errCh chan<- error) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/auth/callback", func(w http.ResponseWriter, r *http.Request) {
+		if errText := r.URL.Query().Get("error"); errText != "" {
+			description := r.URL.Query().Get("error_description")
+			if description != "" {
+				errText = errText + ": " + description
+			}
+			select {
+			case errCh <- errors.New(errText):
+			default:
+			}
+			http.Error(w, "OAuth login failed.", http.StatusBadRequest)
+			return
+		}
+		code := r.URL.Query().Get("code")
+		if code == "" {
+			http.Error(w, "Missing OAuth code.", http.StatusBadRequest)
+			return
+		}
+		select {
+		case codeCh <- code:
+		default:
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = io.WriteString(w, "<!doctype html><title>Login complete</title><p>Login complete. You can close this window.</p>")
+	})
+	return mux
+}
+
+func buildOAuthAuthorizeURL(supabaseURL string, provider string, redirectTo string, codeChallenge string) string {
+	baseURL := strings.TrimRight(supabaseURL, "/") + "/auth/v1/authorize"
+	authorizeURL, err := url.Parse(baseURL)
+	if err != nil {
+		return baseURL
+	}
+	query := authorizeURL.Query()
+	query.Set("provider", provider)
+	query.Set("redirect_to", redirectTo)
+	query.Set("code_challenge", codeChallenge)
+	query.Set("code_challenge_method", "s256")
+	authorizeURL.RawQuery = query.Encode()
+	return authorizeURL.String()
+}
+
+func generatePKCEPair() (string, string, error) {
+	randomBytes := make([]byte, 32)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return "", "", fmt.Errorf("generate PKCE verifier: %w", err)
+	}
+	verifier := base64.RawURLEncoding.EncodeToString(randomBytes)
+	sum := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(sum[:])
+	return verifier, challenge, nil
+}
+
+func openSystemBrowser(rawURL string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", rawURL).Start()
+	case "linux":
+		return exec.Command("xdg-open", rawURL).Start()
+	case "windows":
+		return exec.Command("rundll32", "url.dll,FileProtocolHandler", rawURL).Start()
+	default:
+		return fmt.Errorf("unsupported OS %q", runtime.GOOS)
+	}
 }

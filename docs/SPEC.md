@@ -80,12 +80,13 @@ Output shape when not quiet:
 
 ### `login`
 
-Current MVP login uses Supabase email/password auth. This is temporary; the
-intended product flow is to replace the first token acquisition step with a web
-dashboard Google OAuth/PKCE flow later.
+Default login uses Supabase Google OAuth with PKCE and a localhost callback.
+The CLI opens the browser, receives the authorization code on a temporary local
+HTTP server, exchanges it for Supabase access and refresh tokens, and stores the
+session locally.
 
 ```bash
-TOKEN_AGENT_PASSWORD='password' token-agent login --email user@example.com
+token-agent login
 ```
 
 Important flags:
@@ -95,14 +96,27 @@ Important flags:
 --supabase-url URL      Supabase project URL, env TOKEN_AGENT_SUPABASE_URL
 --anon-key KEY          Supabase anon key, env TOKEN_AGENT_SUPABASE_ANON_KEY
 --sync-endpoint URL     Edge Function URL, env TOKEN_AGENT_SYNC_ENDPOINT
+--provider NAME         OAuth provider, default google
+--callback-address ADDR local callback listener, default 127.0.0.1:8787
+--timeout DURATION      OAuth login timeout, default 5m
+--no-browser            print OAuth URL without opening a browser
 --email EMAIL           Supabase Auth email, env TOKEN_AGENT_EMAIL
 --password VALUE        direct password; avoid for shell history
 --password-env NAME     env var containing password, default TOKEN_AGENT_PASSWORD
 --quiet                 suppress JSON output
 ```
 
+If `--email` is provided, the CLI uses the legacy email/password login path.
+This remains available only as a temporary testing fallback.
+
+Supabase Auth redirect allowlist must include:
+
+```text
+http://127.0.0.1:8787/auth/callback
+```
+
 On success, write `auth.json` with mode `0600`.
-Do not print access tokens, refresh tokens, or passwords.
+Do not print access tokens, refresh tokens, passwords, or OAuth codes.
 
 `auth.json` fields:
 
@@ -642,15 +656,9 @@ go build -o ~/.mylocalagenttoken/bin/token-agent ./cmd/agent-token
 
 ## Intended Product Evolution
 
-Current email/password `login` exists to validate Supabase sync.
-For the product dashboard, replace initial login with Google OAuth:
-
-- `token-agent login` opens the web dashboard login page.
-- User signs in with Google.
-- CLI receives the Supabase session through localhost callback + PKCE, or a
-  device-code polling flow for SSH/headless environments.
-- CLI stores the same `auth.json` shape.
-- `sync` and refresh behavior remain reusable.
+The current Google OAuth login is a localhost callback flow. For SSH/headless
+environments, add a device-code or browser-mediated polling flow later while
+reusing the same `auth.json` shape and refresh behavior.
 
 Device identity is intentionally deferred for MVP. When added, generate a
 local device UUID and later consider server-issued registration or signatures if

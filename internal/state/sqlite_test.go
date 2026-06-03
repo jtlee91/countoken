@@ -115,6 +115,58 @@ func TestUpsertSourceFileMarksSessionPendingSync(t *testing.T) {
 	}
 }
 
+func TestMarkAllSessionsPendingSync(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "usage.sqlite")
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	for _, hash := range []string{"session-a", "session-b"} {
+		if err := store.UpsertSourceFile(context.Background(), "codex", "file-"+hash, 123, "2026-06-02T16:30:00+09:00", codex.SessionSummary{
+			SessionHash:   hash,
+			StartedAt:     "2026-06-02T16:00:00+09:00",
+			EndedAt:       "2026-06-02T16:10:00+09:00",
+			UserTurnCount: 1,
+			LLMCallCount:  2,
+			Tokens: codex.TokenSummary{
+				Input:  10,
+				Output: 20,
+				Total:  30,
+			},
+		}); err != nil {
+			t.Fatalf("UpsertSourceFile(%s) error = %v", hash, err)
+		}
+	}
+
+	pending, err := store.ListPendingSessions(context.Background())
+	if err != nil {
+		t.Fatalf("ListPendingSessions() error = %v", err)
+	}
+	if err := store.MarkSessionsSynced(context.Background(), pending); err != nil {
+		t.Fatalf("MarkSessionsSynced() error = %v", err)
+	}
+	pending, err = store.ListPendingSessions(context.Background())
+	if err != nil {
+		t.Fatalf("ListPendingSessions(after mark synced) error = %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("pending sessions after mark synced = %+v, want none", pending)
+	}
+
+	if err := store.MarkAllSessionsPendingSync(context.Background()); err != nil {
+		t.Fatalf("MarkAllSessionsPendingSync() error = %v", err)
+	}
+	pending, err = store.ListPendingSessions(context.Background())
+	if err != nil {
+		t.Fatalf("ListPendingSessions(after mark all) error = %v", err)
+	}
+	if len(pending) != 2 {
+		t.Fatalf("pending sessions after mark all = %+v, want two sessions", pending)
+	}
+}
+
 func TestOpenNormalizesExistingTimestampsToKST(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "usage.sqlite")
 	store, err := Open(dbPath)

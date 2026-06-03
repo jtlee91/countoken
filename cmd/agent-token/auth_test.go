@@ -2,16 +2,158 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jtlee/local-agent-usage/internal/state"
 )
+
+func TestRunLoginGoogleOAuthStoresAuthSession(t *testing.T) {
+	stateDir := t.TempDir()
+
+	loginURL := make(chan string, 1)
+	previousOpenBrowser := openBrowserURL
+	openBrowserURL = func(rawURL string) error {
+		loginURL <- rawURL
+		return nil
+	}
+	t.Cleanup(func() {
+		openBrowserURL = previousOpenBrowser
+	})
+
+	var tokenRequest map[string]any
+	previousClient := authHTTPClient
+	authHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Method != http.MethodPost {
+				t.Fatalf("method = %s, want POST", r.Method)
+			}
+			if r.URL.String() != "https://example.supabase.co/auth/v1/token?grant_type=pkce" {
+				t.Fatalf("token URL = %s", r.URL.String())
+			}
+			if r.Header.Get("apikey") != "anon-key" {
+				t.Fatalf("apikey header = %q", r.Header.Get("apikey"))
+			}
+			if err := json.NewDecoder(r.Body).Decode(&tokenRequest); err != nil {
+				t.Fatalf("Decode(token request) error = %v", err)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body: io.NopCloser(strings.NewReader(`{
+					"access_token": "oauth-access-token",
+					"refresh_token": "oauth-refresh-token",
+					"expires_in": 3600,
+					"expires_at": 1780404000,
+					"user": {"id": "google-user-id"}
+				}`)),
+			}, nil
+		}),
+	}
+	t.Cleanup(func() {
+		authHTTPClient = previousClient
+	})
+
+	done := make(chan error, 1)
+	var stdout bytes.Buffer
+	go func() {
+		done <- run([]string{
+			"login",
+			"--state-dir",
+			stateDir,
+			"--supabase-url",
+			"https://example.supabase.co",
+			"--anon-key",
+			"anon-key",
+			"--sync-endpoint",
+			"https://example.supabase.co/functions/v1/sync-usage",
+			"--callback-address",
+			"127.0.0.1:0",
+			"--timeout",
+			"2s",
+		}, &stdout)
+	}()
+
+	var rawLoginURL string
+	select {
+	case rawLoginURL = <-loginURL:
+	case err := <-done:
+		t.Fatalf("run(login oauth) returned before opening browser: %v", err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("login did not open browser URL")
+	}
+
+	parsedLoginURL, err := url.Parse(rawLoginURL)
+	if err != nil {
+		t.Fatalf("Parse(login URL) error = %v", err)
+	}
+	query := parsedLoginURL.Query()
+	if parsedLoginURL.String() == "" || parsedLoginURL.Path != "/auth/v1/authorize" {
+		t.Fatalf("login URL = %s, want Supabase authorize URL", parsedLoginURL.String())
+	}
+	if query.Get("provider") != "google" {
+		t.Fatalf("provider = %q, want google", query.Get("provider"))
+	}
+	if query.Get("code_challenge_method") != "s256" {
+		t.Fatalf("code_challenge_method = %q, want s256", query.Get("code_challenge_method"))
+	}
+	redirectTo := query.Get("redirect_to")
+	if !strings.HasPrefix(redirectTo, "http://127.0.0.1:") || !strings.HasSuffix(redirectTo, "/auth/callback") {
+		t.Fatalf("redirect_to = %q, want local callback URL", redirectTo)
+	}
+
+	callbackURL := redirectTo + "?code=auth-code"
+	resp, err := http.Get(callbackURL)
+	if err != nil {
+		t.Fatalf("GET(callback URL) error = %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("callback status = %s, want 200 OK", resp.Status)
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("run(login oauth) error = %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("login did not finish after callback")
+	}
+
+	if tokenRequest["auth_code"] != "auth-code" {
+		t.Fatalf("token auth_code = %#v, want auth-code", tokenRequest["auth_code"])
+	}
+	verifier, ok := tokenRequest["code_verifier"].(string)
+	if !ok || verifier == "" {
+		t.Fatalf("token code_verifier = %#v, want non-empty string", tokenRequest["code_verifier"])
+	}
+	if pkceChallengeForTest(verifier) != query.Get("code_challenge") {
+		t.Fatalf("code challenge does not match verifier")
+	}
+	if strings.Contains(stdout.String(), "oauth-access-token") || strings.Contains(stdout.String(), "oauth-refresh-token") {
+		t.Fatalf("login stdout leaked OAuth token: %s", stdout.String())
+	}
+
+	auth, err := loadAuthState(filepath.Join(stateDir, "auth.json"))
+	if err != nil {
+		t.Fatalf("loadAuthState() error = %v", err)
+	}
+	if auth.UserID != "google-user-id" || auth.AccessToken != "oauth-access-token" || auth.RefreshToken != "oauth-refresh-token" {
+		t.Fatalf("stored auth = %+v", auth)
+	}
+}
 
 func TestRunLoginStoresAuthSession(t *testing.T) {
 	stateDir := t.TempDir()
@@ -95,6 +237,78 @@ func TestRunLoginStoresAuthSession(t *testing.T) {
 	}
 	if auth.SyncEndpoint != "https://example.supabase.co/functions/v1/sync-usage" {
 		t.Fatalf("SyncEndpoint = %q", auth.SyncEndpoint)
+	}
+}
+
+func TestRunLoginMarksExistingSessionsPendingForNewUser(t *testing.T) {
+	stateDir := t.TempDir()
+	t.Setenv("TOKEN_AGENT_TEST_PASSWORD", "test-password")
+	seedSyncSession(t, stateDir)
+
+	store, err := state.Open(filepath.Join(stateDir, "usage.sqlite"))
+	if err != nil {
+		t.Fatalf("state.Open() error = %v", err)
+	}
+	pending, err := store.ListPendingSessions(context.Background())
+	if err != nil {
+		t.Fatalf("ListPendingSessions() error = %v", err)
+	}
+	if err := store.MarkSessionsSynced(context.Background(), pending); err != nil {
+		t.Fatalf("MarkSessionsSynced() error = %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close(store) error = %v", err)
+	}
+
+	previousClient := authHTTPClient
+	authHTTPClient = &http.Client{
+		Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     http.Header{"Content-Type": []string{"application/json"}},
+				Body: io.NopCloser(strings.NewReader(`{
+					"access_token": "new-access-token",
+					"refresh_token": "new-refresh-token",
+					"expires_in": 3600,
+					"expires_at": 1780404000,
+					"user": {"id": "new-user-id"}
+				}`)),
+			}, nil
+		}),
+	}
+	t.Cleanup(func() {
+		authHTTPClient = previousClient
+	})
+
+	var stdout bytes.Buffer
+	err = run([]string{
+		"login",
+		"--state-dir",
+		stateDir,
+		"--supabase-url",
+		"https://example.supabase.co",
+		"--anon-key",
+		"anon-key",
+		"--email",
+		"user@example.com",
+		"--password-env",
+		"TOKEN_AGENT_TEST_PASSWORD",
+	}, &stdout)
+	if err != nil {
+		t.Fatalf("run(login) error = %v", err)
+	}
+
+	store, err = state.Open(filepath.Join(stateDir, "usage.sqlite"))
+	if err != nil {
+		t.Fatalf("state.Open(after login) error = %v", err)
+	}
+	defer store.Close()
+	pending, err = store.ListPendingSessions(context.Background())
+	if err != nil {
+		t.Fatalf("ListPendingSessions(after login) error = %v", err)
+	}
+	if len(pending) != 1 || pending[0].SessionHash != "session-hash" {
+		t.Fatalf("pending after new login = %+v, want existing session pending", pending)
 	}
 }
 
@@ -236,4 +450,9 @@ func seedSyncSession(t *testing.T, stateDir string) {
 	`); err != nil {
 		t.Fatalf("seed sqlite state error = %v", err)
 	}
+}
+
+func pkceChallengeForTest(verifier string) string {
+	sum := sha256.Sum256([]byte(verifier))
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }

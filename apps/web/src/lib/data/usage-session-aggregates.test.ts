@@ -13,6 +13,8 @@ import {
 const rows: UsageSessionAggregateRow[] = [
   {
     session_hash: "codex-today",
+    device_id: "device-a",
+    device_label: "Jeongtaekui-MacBookPro.local",
     provider: "codex",
     started_at: "2026-06-03T01:40:00.000Z",
     ended_at: "2026-06-03T02:00:00.000Z",
@@ -155,6 +157,7 @@ test("summarizeUsageSessions returns recent sessions and daily totals for dashbo
       sessionHash: session.sessionHash,
       provider: session.provider,
       providerLabel: session.providerLabel,
+      deviceLabel: session.deviceLabel,
       totalTokens: session.totalTokens,
     })),
     [
@@ -162,18 +165,21 @@ test("summarizeUsageSessions returns recent sessions and daily totals for dashbo
         sessionHash: "codex-today",
         provider: "codex",
         providerLabel: "Codex",
+        deviceLabel: "Jeongtaekui-MacBookPro.local",
         totalTokens: 1000,
       },
       {
         sessionHash: "claude-week",
         provider: "claude",
         providerLabel: "Claude Code",
+        deviceLabel: "Unknown device",
         totalTokens: 700,
       },
       {
         sessionHash: "codex-old",
         provider: "codex",
         providerLabel: "Codex",
+        deviceLabel: "Unknown device",
         totalTokens: 500,
       },
     ],

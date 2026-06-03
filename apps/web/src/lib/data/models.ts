@@ -69,6 +69,8 @@ export type DashboardDailyUsage = {
 
 export type DashboardSession = {
   sessionHash: string;
+  deviceId: string | null;
+  deviceLabel: string;
   provider: string;
   providerLabel: string;
   startedAt: string;

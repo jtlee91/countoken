@@ -51,6 +51,11 @@ type ShareCardRow = {
   expires_at: string | null;
 };
 
+type UsageDeviceRow = {
+  device_id: string;
+  device_label: string;
+};
+
 function toViewerRankingSummary(
   snapshot?: RankingSnapshotRow | null,
 ): ViewerRankingSummary | null {
@@ -214,6 +219,7 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
         .select(
           [
             "session_hash",
+            "device_id",
             "provider",
             "started_at",
             "ended_at",
@@ -245,8 +251,38 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
     const dailyRows = (dailyResult.data ?? []) as unknown as UsageDailyAggregateRow[];
     const sessionRows = (sessionsResult.data ??
       []) as unknown as UsageSessionAggregateRow[];
+    const deviceIds = [
+      ...new Set(
+        sessionRows
+          .map((session) => session.device_id)
+          .filter((deviceId): deviceId is string => Boolean(deviceId)),
+      ),
+    ];
+    let deviceLabelsById = new Map<string, string>();
+
+    if (deviceIds.length > 0) {
+      const devicesResult = await supabase
+        .from("usage_devices")
+        .select("device_id, device_label")
+        .eq("user_id", viewer.userId)
+        .in("device_id", deviceIds);
+
+      deviceLabelsById = new Map(
+        ((devicesResult.data ?? []) as UsageDeviceRow[]).map((device) => [
+          device.device_id,
+          device.device_label,
+        ]),
+      );
+    }
+
+    const enrichedSessionRows = sessionRows.map((session) => ({
+      ...session,
+      device_label: session.device_id
+        ? (deviceLabelsById.get(session.device_id) ?? null)
+        : null,
+    }));
     const dashboard = summarizeUsageDailyDashboard(dailyRows, {
-      recentSessionRows: sessionRows,
+      recentSessionRows: enrichedSessionRows,
       recentSessionLimit: 5,
     });
 

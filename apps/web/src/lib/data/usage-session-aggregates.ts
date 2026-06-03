@@ -11,6 +11,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type UsageSessionAggregateRow = {
   session_hash: string;
+  device_id?: string | null;
+  device_label?: string | null;
   provider: string;
   started_at: string;
   ended_at: string;
@@ -297,8 +299,12 @@ export function summarizeUsageDailyDashboard(
 }
 
 function toDashboardSession(row: UsageSessionAggregateRow): DashboardSession {
+  const deviceLabel = row.device_label?.trim() || "Unknown device";
+
   return {
     sessionHash: row.session_hash,
+    deviceId: row.device_id ?? null,
+    deviceLabel,
     provider: row.provider,
     providerLabel: providerLabel(row.provider),
     startedAt: row.started_at,

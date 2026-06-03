@@ -43,10 +43,6 @@
         padding: 28px 0 52px;
       }
 
-      .page-header {
-        margin-bottom: 22px;
-      }
-
       h1,
       h2,
       p {
@@ -59,7 +55,7 @@
       }
 
       .note {
-        max-width: 780px;
+        max-width: 820px;
         margin-top: 8px;
         color: var(--muted);
         font-size: 14px;
@@ -253,209 +249,220 @@
         text-overflow: ellipsis;
       }
 
-      .trace-copy {
+      .date-tile-time {
+        display: grid;
+        grid-template-columns: 54px minmax(0, 1fr);
+        column-gap: 10px;
+        align-items: center;
+      }
+
+      .date-tile {
+        display: flex;
+        min-height: 48px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface-alt);
+      }
+
+      .date-tile .month {
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 950;
+      }
+
+      .date-tile .day {
+        margin-top: 1px;
+        font-size: 19px;
+        font-weight: 950;
+        line-height: 1;
+      }
+
+      .date-detail {
         display: flex;
         min-width: 0;
         flex-direction: column;
         gap: 5px;
       }
 
-      .trace-row {
-        display: grid;
-        grid-template-columns: 36px minmax(0, 1fr) auto;
-        align-items: baseline;
-        gap: 7px;
+      .date-detail .primary {
+        overflow: hidden;
+        font-size: 15px;
+        font-weight: 950;
+        text-overflow: ellipsis;
         white-space: nowrap;
       }
 
-      .trace-label {
+      .date-detail .secondary {
+        overflow: hidden;
         color: var(--muted);
+        font-size: 12px;
+        font-weight: 850;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .duration-metric {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .duration-metric .metric {
+        font-size: 21px;
+        font-weight: 950;
+        line-height: 1.05;
+        white-space: nowrap;
+      }
+
+      .duration-metric .range {
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 850;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .duration-metric .date {
+        color: var(--code-blue);
         font-size: 11px;
         font-weight: 950;
-        text-transform: uppercase;
+        white-space: nowrap;
       }
 
-      .trace-time {
-        overflow: hidden;
-        font-size: 13px;
-        font-weight: 950;
-        text-overflow: ellipsis;
-      }
-
-      .trace-duration {
-        color: var(--code-blue);
-        font-size: 12px;
-        font-weight: 950;
-      }
-
-      .duration-stack {
+      .recency-time {
         display: flex;
         min-width: 0;
         flex-direction: column;
         gap: 6px;
       }
 
-      .duration-main {
-        color: var(--foreground);
-        font-size: 18px;
+      .recency-time .ended {
+        color: var(--token-green);
+        font-size: 16px;
         font-weight: 950;
         white-space: nowrap;
       }
 
-      .duration-meta {
-        display: grid;
-        grid-template-columns: 34px minmax(0, 1fr);
-        gap: 6px;
-        color: var(--muted);
+      .recency-time .exact {
+        overflow: hidden;
+        color: var(--foreground);
         font-size: 12px;
-        font-weight: 850;
+        font-weight: 950;
+        text-overflow: ellipsis;
         white-space: nowrap;
       }
 
-      .duration-meta b {
+      .recency-time .started {
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 850;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .log-time {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .log-line {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        align-items: baseline;
+        column-gap: 7px;
+        white-space: nowrap;
+      }
+
+      .log-tag {
+        border-radius: 4px;
+        background: var(--surface-alt);
+        color: var(--muted);
+        padding: 2px 4px;
+        font-size: 10px;
+        font-weight: 950;
+        text-align: center;
+      }
+
+      .log-line .value {
+        overflow: hidden;
+        color: var(--foreground);
+        font-size: 12px;
+        font-weight: 950;
+        text-overflow: ellipsis;
+      }
+
+      .split-time {
+        display: grid;
+        min-width: 0;
+        grid-template-columns: 1fr 1fr;
+        column-gap: 10px;
+        align-items: center;
+      }
+
+      .split-block {
+        min-width: 0;
+      }
+
+      .split-block .label {
+        display: block;
         color: var(--muted);
         font-size: 10px;
         font-weight: 950;
         text-transform: uppercase;
       }
 
-      .duration-meta span {
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .span-line {
-        display: flex;
-        min-width: 0;
-        flex-direction: column;
-        gap: 7px;
-      }
-
-      .span-times {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        font-size: 12px;
+      .split-block .date {
+        display: block;
+        margin-top: 3px;
+        font-size: 13px;
         font-weight: 950;
         white-space: nowrap;
       }
 
-      .track {
-        position: relative;
-        height: 8px;
-        border-radius: 999px;
-        background: var(--surface-alt);
-      }
-
-      .track::before {
-        position: absolute;
-        top: 3px;
-        left: 8px;
-        right: 8px;
-        height: 2px;
-        border-radius: 999px;
-        background: var(--border);
-        content: "";
-      }
-
-      .track .tick {
-        position: absolute;
-        top: 0;
-        width: 8px;
-        height: 8px;
-        border-radius: 999px;
-        background: var(--code-blue);
-      }
-
-      .track .tick:first-child {
-        left: 4px;
-      }
-
-      .track .tick:last-child {
-        right: 4px;
-        background: var(--token-green);
-      }
-
-      .span-foot {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
+      .split-block .clock {
+        display: block;
+        margin-top: 3px;
         color: var(--muted);
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 850;
         white-space: nowrap;
       }
 
-      .bracket-stack {
-        display: grid;
-        grid-template-columns: 10px minmax(0, 1fr);
-        column-gap: 9px;
-        align-items: stretch;
-      }
-
-      .bracket {
-        position: relative;
-      }
-
-      .bracket::before {
-        position: absolute;
-        top: 8px;
-        bottom: 18px;
-        left: 3px;
-        width: 2px;
-        border-radius: 999px;
-        background: var(--border);
-        content: "";
-      }
-
-      .bracket::after {
-        position: absolute;
-        top: 8px;
-        left: 3px;
-        width: 8px;
-        height: 40px;
-        border-top: 2px solid var(--border);
-        border-bottom: 2px solid var(--border);
-        content: "";
-      }
-
-      .bracket-copy {
+      .range-sentence {
         display: flex;
         min-width: 0;
         flex-direction: column;
         gap: 5px;
       }
 
-      .bracket-row {
-        display: flex;
-        min-width: 0;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 8px;
-        white-space: nowrap;
-      }
-
-      .bracket-time {
+      .range-sentence .main {
         overflow: hidden;
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 950;
         text-overflow: ellipsis;
-      }
-
-      .bracket-label {
-        color: var(--muted);
-        font-size: 11px;
-        font-weight: 950;
-        text-transform: uppercase;
-      }
-
-      .bracket-foot {
-        color: var(--muted);
-        font-size: 11px;
-        font-weight: 850;
         white-space: nowrap;
+      }
+
+      .range-sentence .sub {
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 850;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .range-sentence .accent {
+        color: var(--warm-amber);
+        font-weight: 950;
       }
 
       @media (max-width: 720px) {
@@ -475,16 +482,15 @@
       <div class="page-header">
         <h1>최근 세션 Time 컬럼 후보</h1>
         <p class="note">
-          기존 C안의 명시적인 Start/End 타임라인은 유지하고, observability trace,
-          product analytics session table, audit log interval 패턴을 섞어 새 후보를
-          구성했습니다.
+          기존 C안은 그대로 유지했습니다. 나머지 후보는 C안의 타임라인 구조를
+          변형하지 않고, 서로 다른 정보 우선순위와 시각 언어로 다시 구성했습니다.
         </p>
       </div>
 
       <section class="option">
         <div class="option-title">
-          <h2>A. Start / End 타임라인</h2>
-          <span class="badge">기존 C 유지</span>
+          <h2>C. 기존 Start / End 타임라인</h2>
+          <span class="badge">keep</span>
         </div>
         <div class="table-wrap">
           <table>
@@ -542,8 +548,8 @@
 
       <section class="option">
         <div class="option-title">
-          <h2>B. Trace Rail + Duration</h2>
-          <span class="badge">recommended</span>
+          <h2>1. Date Tile + Last Used</h2>
+          <span class="badge">calendar</span>
         </div>
         <div class="table-wrap">
           <table>
@@ -576,22 +582,15 @@
                 <td><span class="device-text">Jeongtaekui-MacBookPro.local</span></td>
                 <td><span class="provider-text">Codex</span></td>
                 <td class="time-cell">
-                  <div class="time-rail">
-                    <div class="rail">
-                      <span class="dot start"></span>
-                      <span class="dot end"></span>
+                  <div class="date-tile-time">
+                    <div class="date-tile">
+                      <span class="month">JUN</span>
+                      <span class="day mono">03</span>
                     </div>
-                    <div class="trace-copy">
-                      <div class="trace-row">
-                        <span class="trace-label">Start</span>
-                        <span class="trace-time mono">06.02 PM01:58</span>
-                        <span></span>
-                      </div>
-                      <div class="trace-row">
-                        <span class="trace-label">End</span>
-                        <span class="trace-time mono">06.03 PM08:35</span>
-                        <span class="trace-duration mono">30h37m</span>
-                      </div>
+                    <div class="date-detail">
+                      <span class="primary mono">PM08:35 ended</span>
+                      <span class="secondary">from 06.02 PM01:58</span>
+                      <span class="secondary mono">30h37m</span>
                     </div>
                   </div>
                 </td>
@@ -609,8 +608,8 @@
 
       <section class="option">
         <div class="option-title">
-          <h2>C. Duration Ladder</h2>
-          <span class="badge">duration first</span>
+          <h2>2. Duration Metric</h2>
+          <span class="badge">time spent</span>
         </div>
         <div class="table-wrap">
           <table>
@@ -643,13 +642,126 @@
                 <td><span class="device-text">Jeongtaekui-MacBookPro.local</span></td>
                 <td><span class="provider-text">Codex</span></td>
                 <td class="time-cell">
-                  <div class="duration-stack">
-                    <div class="duration-main mono">30h 37m</div>
-                    <div class="duration-meta">
-                      <b>Start</b>
-                      <span class="mono">06.02 PM01:58</span>
-                      <b>End</b>
-                      <span class="mono">06.03 PM08:35</span>
+                  <div class="duration-metric">
+                    <span class="metric mono">30h 37m</span>
+                    <span class="range mono">PM01:58 - PM08:35</span>
+                    <span class="date">06.02 to 06.03</span>
+                  </div>
+                </td>
+                <td class="num">216</td>
+                <td class="num">1,788</td>
+                <td class="num">6.7M</td>
+                <td class="num">225.1M</td>
+                <td class="num">815K</td>
+                <td class="num">232.6M</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="option">
+        <div class="option-title">
+          <h2>3. Recency First</h2>
+          <span class="badge">recent activity</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <colgroup>
+              <col class="device" />
+              <col class="provider" />
+              <col class="time" />
+              <col class="small" />
+              <col class="small" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>Provider</th>
+                <th>Time</th>
+                <th class="num">Prompts</th>
+                <th class="num">Calls</th>
+                <th class="num">Input</th>
+                <th class="num">Cache</th>
+                <th class="num">Output</th>
+                <th class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="device-text">Jeongtaekui-MacBookPro.local</span></td>
+                <td><span class="provider-text">Codex</span></td>
+                <td class="time-cell">
+                  <div class="recency-time">
+                    <span class="ended">just ended</span>
+                    <span class="exact mono">06.03 PM08:35</span>
+                    <span class="started">started 06.02 PM01:58</span>
+                  </div>
+                </td>
+                <td class="num">216</td>
+                <td class="num">1,788</td>
+                <td class="num">6.7M</td>
+                <td class="num">225.1M</td>
+                <td class="num">815K</td>
+                <td class="num">232.6M</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="option">
+        <div class="option-title">
+          <h2>4. Terminal Log Lines</h2>
+          <span class="badge">log style</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <colgroup>
+              <col class="device" />
+              <col class="provider" />
+              <col class="time" />
+              <col class="small" />
+              <col class="small" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+              <col class="tokens" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>Provider</th>
+                <th>Time</th>
+                <th class="num">Prompts</th>
+                <th class="num">Calls</th>
+                <th class="num">Input</th>
+                <th class="num">Cache</th>
+                <th class="num">Output</th>
+                <th class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="device-text">Jeongtaekui-MacBookPro.local</span></td>
+                <td><span class="provider-text">Codex</span></td>
+                <td class="time-cell">
+                  <div class="log-time mono">
+                    <div class="log-line">
+                      <span class="log-tag">S</span>
+                      <span class="value">06.02 13:58</span>
+                    </div>
+                    <div class="log-line">
+                      <span class="log-tag">E</span>
+                      <span class="value">06.03 20:35</span>
+                    </div>
+                    <div class="log-line">
+                      <span class="log-tag">D</span>
+                      <span class="value">30h37m elapsed</span>
                     </div>
                   </div>
                 </td>
@@ -667,8 +779,8 @@
 
       <section class="option">
         <div class="option-title">
-          <h2>D. Horizontal Session Span</h2>
-          <span class="badge">scan line</span>
+          <h2>5. Start / End Columns</h2>
+          <span class="badge">comparison</span>
         </div>
         <div class="table-wrap">
           <table>
@@ -701,18 +813,16 @@
                 <td><span class="device-text">Jeongtaekui-MacBookPro.local</span></td>
                 <td><span class="provider-text">Codex</span></td>
                 <td class="time-cell">
-                  <div class="span-line">
-                    <div class="span-times mono">
-                      <span>PM01:58</span>
-                      <span>PM08:35</span>
+                  <div class="split-time">
+                    <div class="split-block">
+                      <span class="label">Start</span>
+                      <span class="date mono">06.02</span>
+                      <span class="clock mono">PM01:58</span>
                     </div>
-                    <div class="track">
-                      <span class="tick"></span>
-                      <span class="tick"></span>
-                    </div>
-                    <div class="span-foot">
-                      <span>06.02 -> 06.03</span>
-                      <span class="mono">30h37m</span>
+                    <div class="split-block">
+                      <span class="label">End</span>
+                      <span class="date mono">06.03</span>
+                      <span class="clock mono">PM08:35</span>
                     </div>
                   </div>
                 </td>
@@ -730,8 +840,8 @@
 
       <section class="option">
         <div class="option-title">
-          <h2>E. Bracketed Endpoint Stack</h2>
-          <span class="badge">audit log</span>
+          <h2>6. Natural Range Text</h2>
+          <span class="badge">plain ops</span>
         </div>
         <div class="table-wrap">
           <table>
@@ -764,21 +874,10 @@
                 <td><span class="device-text">Jeongtaekui-MacBookPro.local</span></td>
                 <td><span class="provider-text">Codex</span></td>
                 <td class="time-cell">
-                  <div class="bracket-stack">
-                    <div class="bracket"></div>
-                    <div class="bracket-copy">
-                      <div class="bracket-row">
-                        <span class="bracket-time mono">06.02 PM01:58</span>
-                        <span class="bracket-label">Start</span>
-                      </div>
-                      <div class="bracket-row">
-                        <span class="bracket-time mono">06.03 PM08:35</span>
-                        <span class="bracket-label">End</span>
-                      </div>
-                      <div class="bracket-foot">
-                        <span class="mono">30h37m</span> session span
-                      </div>
-                    </div>
+                  <div class="range-sentence">
+                    <span class="main">Jun 2 night to Jun 3 evening</span>
+                    <span class="sub mono">PM01:58 - PM08:35</span>
+                    <span class="sub"><span class="accent mono">30h37m</span> total span</span>
                   </div>
                 </td>
                 <td class="num">216</td>
@@ -792,7 +891,6 @@
           </table>
         </div>
       </section>
-
     </main>
   </body>
 </html>

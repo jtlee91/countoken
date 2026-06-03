@@ -60,6 +60,61 @@ func TestUpsertSourceFileStoresAuditTimestampsInKST(t *testing.T) {
 	}
 }
 
+func TestUpsertSourceFileMarksSessionPendingSync(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "usage.sqlite")
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	session := codex.SessionSummary{
+		SessionHash:   "session-hash",
+		StartedAt:     "2026-06-02T16:00:00+09:00",
+		EndedAt:       "2026-06-02T16:10:00+09:00",
+		UserTurnCount: 1,
+		LLMCallCount:  2,
+		Tokens: codex.TokenSummary{
+			Input:  10,
+			Output: 20,
+			Total:  30,
+		},
+	}
+	if err := store.UpsertSourceFile(context.Background(), "codex", "file-key", 123, "2026-06-02T16:30:00+09:00", session); err != nil {
+		t.Fatalf("UpsertSourceFile() error = %v", err)
+	}
+
+	pending, err := store.ListPendingSessions(context.Background())
+	if err != nil {
+		t.Fatalf("ListPendingSessions() error = %v", err)
+	}
+	if len(pending) != 1 || pending[0].SessionHash != "session-hash" {
+		t.Fatalf("pending sessions = %+v, want session-hash", pending)
+	}
+
+	if err := store.MarkSessionsSynced(context.Background(), pending); err != nil {
+		t.Fatalf("MarkSessionsSynced() error = %v", err)
+	}
+	pending, err = store.ListPendingSessions(context.Background())
+	if err != nil {
+		t.Fatalf("ListPendingSessions(after mark) error = %v", err)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("pending sessions after mark = %+v, want none", pending)
+	}
+
+	if err := store.UpsertSourceFile(context.Background(), "codex", "file-key", 124, "2026-06-02T16:31:00+09:00", session); err != nil {
+		t.Fatalf("UpsertSourceFile(second) error = %v", err)
+	}
+	pending, err = store.ListPendingSessions(context.Background())
+	if err != nil {
+		t.Fatalf("ListPendingSessions(after second upsert) error = %v", err)
+	}
+	if len(pending) != 1 || pending[0].SessionHash != "session-hash" {
+		t.Fatalf("pending sessions after second upsert = %+v, want session-hash", pending)
+	}
+}
+
 func TestOpenNormalizesExistingTimestampsToKST(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "usage.sqlite")
 	store, err := Open(dbPath)

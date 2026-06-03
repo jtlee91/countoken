@@ -396,9 +396,14 @@ func TestRunSyncPostsStoredSessions(t *testing.T) {
 	}
 
 	var requestBody map[string]any
+	var requestCount int
 	previousClient := syncHTTPClient
 	syncHTTPClient = &http.Client{
 		Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			requestCount++
+			if requestCount > 1 {
+				t.Fatalf("unexpected sync request #%d after all sessions were already synced", requestCount)
+			}
 			if r.Method != http.MethodPost {
 				t.Fatalf("method = %s, want POST", r.Method)
 			}
@@ -459,6 +464,29 @@ func TestRunSyncPostsStoredSessions(t *testing.T) {
 	}
 	if strings.Contains(stdout.String(), "secret") {
 		t.Fatalf("sync output leaked sensitive text: %s", stdout.String())
+	}
+
+	stdout.Reset()
+	err = run([]string{
+		"sync",
+		"--state-dir",
+		stateDir,
+		"--endpoint",
+		"https://example.test/sync",
+		"--token",
+		"test-token",
+	}, &stdout)
+	if err != nil {
+		t.Fatalf("run(sync second) error = %v", err)
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatalf("Unmarshal(second sync stdout) error = %v; stdout = %s", err, stdout.String())
+	}
+	if result["sessions_uploaded"].(float64) != 0 {
+		t.Fatalf("second sync result = %#v, want zero uploaded sessions", result)
+	}
+	if requestCount != 1 {
+		t.Fatalf("sync request count = %d, want only first sync request", requestCount)
 	}
 }
 

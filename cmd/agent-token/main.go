@@ -188,10 +188,26 @@ func runSync(args []string, stdout io.Writer) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+
+	store, err := state.Open(filepath.Join(*stateDir, "usage.sqlite"))
+	if err != nil {
+		return err
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	sessions, err := store.ListPendingSessions(ctx)
+	if err != nil {
+		return err
+	}
+	if len(sessions) == 0 {
+		return writeSyncResult(stdout, *quiet, 0)
+	}
+
 	resolvedEndpoint := *endpoint
 	resolvedToken := *token
 	if resolvedToken == "" {
-		auth, err := ensureFreshAuth(context.Background(), authPath(*stateDir), 5*time.Minute)
+		auth, err := ensureFreshAuth(ctx, authPath(*stateDir), 5*time.Minute)
 		if err != nil {
 			return fmt.Errorf("sync requires --token or login: %w", err)
 		}
@@ -204,30 +220,26 @@ func runSync(args []string, stdout io.Writer) error {
 		resolvedEndpoint = defaultSyncEndpoint
 	}
 
-	store, err := state.Open(filepath.Join(*stateDir, "usage.sqlite"))
-	if err != nil {
-		return err
-	}
-	defer store.Close()
-
-	sessions, err := store.ListSessions(context.Background())
-	if err != nil {
-		return err
-	}
 	payload := buildSyncPayload(sessions)
-	if err := postSyncPayload(context.Background(), resolvedEndpoint, resolvedToken, payload); err != nil {
+	if err := postSyncPayload(ctx, resolvedEndpoint, resolvedToken, payload); err != nil {
+		return err
+	}
+	if err := store.MarkSessionsSynced(ctx, sessions); err != nil {
 		return err
 	}
 
-	result := syncResult{
-		SessionsUploaded: len(payload.Sessions),
-	}
-	if *quiet {
+	return writeSyncResult(stdout, *quiet, len(payload.Sessions))
+}
+
+func writeSyncResult(stdout io.Writer, quiet bool, sessionsUploaded int) error {
+	if quiet {
 		return nil
 	}
 	encoder := json.NewEncoder(stdout)
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(result)
+	return encoder.Encode(syncResult{
+		SessionsUploaded: sessionsUploaded,
+	})
 }
 
 func getenvDefault(name string, fallback string) string {

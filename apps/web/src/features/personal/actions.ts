@@ -2,8 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 
-import { refreshWeeklyGlobalRankingSnapshot } from "@/lib/ingest/ranking-snapshots";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type ProfileSettingsActionResult =
@@ -59,16 +57,7 @@ export async function updateProfileSettingsAction(input: {
     };
   }
 
-  let supabase: ReturnType<typeof createAdminClient>;
-  try {
-    supabase = createAdminClient();
-  } catch {
-    return {
-      ok: false,
-      errorType: "storage_failed",
-      safeMessage: "Profile settings could not be saved.",
-    };
-  }
+  const supabase = await createClient();
 
   const { error } = await supabase.from("profiles").upsert(
     {
@@ -88,8 +77,6 @@ export async function updateProfileSettingsAction(input: {
       safeMessage: "Profile settings could not be saved.",
     };
   }
-
-  await refreshWeeklyGlobalRankingSnapshot(supabase);
 
   revalidatePath("/ranking");
   revalidatePath("/me/settings");
@@ -119,16 +106,7 @@ export async function revokeDeviceAction(
     };
   }
 
-  let supabase: ReturnType<typeof createAdminClient>;
-  try {
-    supabase = createAdminClient();
-  } catch {
-    return {
-      ok: false,
-      errorType: "storage_failed",
-      safeMessage: "Device could not be revoked.",
-    };
-  }
+  const supabase = await createClient();
 
   const { data: device, error: deviceError } = await supabase
     .from("usage_devices")

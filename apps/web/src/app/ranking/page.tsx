@@ -1,10 +1,15 @@
 import { SiteShell } from "@/components/site-shell";
 import { RankingContent } from "@/features/community/ranking-content";
 import { getAuthenticatedViewer } from "@/lib/auth/viewer";
-import { getRankingPageData } from "@/lib/data";
+import { getRankingPageData, grantEligibleBadges } from "@/lib/data";
 
 export default async function RankingPage() {
   const authenticatedViewer = await getAuthenticatedViewer();
+
+  if (authenticatedViewer) {
+    await grantEligibleBadges();
+  }
+
   const rankingData = await getRankingPageData(authenticatedViewer);
 
   return (

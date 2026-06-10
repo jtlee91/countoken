@@ -361,6 +361,18 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
     const viewerRow = viewer?.userId
       ? (rankingRows.find((row) => row.is_viewer) ?? null)
       : null;
+    const viewerGrants = viewer?.userId
+      ? await getUserBadgeRows([viewer.userId])
+      : [];
+    const viewerBadgeRows = await getBadgeRowsById([
+      ...new Set(viewerGrants.map((grant) => grant.badge_id)),
+    ]);
+    const viewerBadges = viewerGrants
+      .map((grant) => {
+        const badge = viewerBadgeRows.get(grant.badge_id);
+        return badge ? toBadgeDefinition(badge, grant) : null;
+      })
+      .filter((badge): badge is BadgeDefinition => Boolean(badge));
     const viewerRanking: ViewerRankingSummary | null = viewerRow
       ? {
           rankPosition: viewerRow.rank_position,
@@ -388,7 +400,7 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
 
     return {
       entries,
-      viewerBadges: [],
+      viewerBadges,
       viewerRanking,
       viewerWeeklyUsage,
       viewerShareSlug,

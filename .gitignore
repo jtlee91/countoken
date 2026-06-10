@@ -21,3 +21,4 @@ apps/web/*.tsbuildinfo
 apps/web/next-env.d.ts
 .vercel
 .env*.local
+supabase/.temp/

@@ -318,8 +318,8 @@ export function DashboardContent({
               <colgroup>
                 <col className="w-[25%]" />
                 <col className="w-[25%]" />
-                <col className="w-[14%]" />
-                <col className="w-[36%]" />
+                <col className="w-[12%]" />
+                <col className="w-[38%]" />
               </colgroup>
               <thead>
                 <tr className="text-xs font-extrabold uppercase text-muted">

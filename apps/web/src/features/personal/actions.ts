@@ -129,3 +129,51 @@ export async function revokeDeviceAction(
 
   return { ok: true, safeMessage: "Device revoked." };
 }
+
+export async function renameDeviceAction(
+  deviceId: string,
+  label: string,
+): Promise<DeviceRevokeActionResult> {
+  const userId = await authenticatedUserId();
+
+  if (!userId) {
+    return {
+      ok: false,
+      errorType: "login_required",
+      safeMessage: "Login is required to rename a device.",
+    };
+  }
+
+  const cleanLabel = label.trim().replace(/\s+/g, " ").slice(0, 60);
+
+  if (!deviceId || deviceId.length > 80 || !cleanLabel) {
+    return {
+      ok: false,
+      errorType: "invalid_device",
+      safeMessage: "Device name is invalid.",
+    };
+  }
+
+  const supabase = await createClient();
+
+  const { data: device, error: deviceError } = await supabase
+    .from("usage_devices")
+    .update({ device_label: cleanLabel })
+    .eq("device_id", deviceId)
+    .eq("user_id", userId)
+    .select("device_id")
+    .maybeSingle<{ device_id: string }>();
+
+  if (deviceError || !device) {
+    return {
+      ok: false,
+      errorType: "storage_failed",
+      safeMessage: "Device could not be renamed.",
+    };
+  }
+
+  revalidatePath("/me/settings");
+  revalidatePath("/me/dashboard");
+
+  return { ok: true, safeMessage: "Device renamed." };
+}

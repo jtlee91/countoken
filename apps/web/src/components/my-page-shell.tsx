@@ -47,8 +47,8 @@ export function MyPageShell({
                 aria-current={active ? "page" : undefined}
                 className={
                   active
-                    ? "inline-flex min-h-10 items-center rounded-md border border-token-green/30 bg-token-green/10 px-3 py-2 text-sm font-extrabold text-foreground shadow-[inset_2px_0_0_var(--token-green)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
-                    : "inline-flex min-h-10 items-center rounded-md px-3 py-2 text-sm font-extrabold text-muted hover:bg-surface-alt hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
+                    ? "inline-flex min-h-10 items-center rounded-r-md border-l-[3px] border-token-green bg-token-green/10 px-3 py-2 text-sm font-extrabold text-token-green focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
+                    : "inline-flex min-h-10 items-center rounded-r-md border-l-[3px] border-transparent px-3 py-2 text-sm font-extrabold text-muted hover:bg-surface-alt hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
                 }
               >
                 {tab.label}

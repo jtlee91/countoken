@@ -5,12 +5,14 @@ import type {
   ShareCard,
   ViewerProfile,
   ViewerRankingSummary,
+  ViewerWeeklyUsageSummary,
 } from "@/lib/data/models";
 
 export type RankingPageData = {
   entries: RankingEntry[];
   viewerBadges: BadgeDefinition[];
   viewerRanking: ViewerRankingSummary | null;
+  viewerWeeklyUsage: ViewerWeeklyUsageSummary | null;
   viewerShareSlug: string | null;
 };
 

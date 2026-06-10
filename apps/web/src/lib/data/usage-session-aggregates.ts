@@ -55,6 +55,12 @@ type DailyDashboardOptions = DailyUsageOptions & {
   recentSessionLimit?: number;
 };
 
+export type ViewerWeeklyUsage = {
+  tokens: number;
+  sessions: number;
+  lastUploadAt: string | null;
+};
+
 function providerLabel(provider: string) {
   switch (provider) {
     case "codex":
@@ -203,6 +209,32 @@ export function summarizeUsageDailyRows(
   }
 
   return dailyUsage;
+}
+
+export function summarizeViewerWeeklyUsage(
+  rows: UsageDailyAggregateRow[],
+  options: DailyUsageOptions = {},
+): ViewerWeeklyUsage {
+  const weekStartKey = koreaDateKey(startOfKoreaWeek(options.now ?? new Date()));
+  let tokens = 0;
+  let sessions = 0;
+  let lastUploadAt: string | null = null;
+
+  for (const row of rows) {
+    if (normalizeUsageDate(row.usage_date) < weekStartKey) {
+      continue;
+    }
+
+    tokens += rowTotalTokens(row);
+    sessions += row.session_count;
+    lastUploadAt = maxTimestamp(lastUploadAt, row.synced_at, row.local_updated_at);
+  }
+
+  return {
+    tokens,
+    sessions,
+    lastUploadAt,
+  };
 }
 
 export function summarizeUsageDailyDashboard(

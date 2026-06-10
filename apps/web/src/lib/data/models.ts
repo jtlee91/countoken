@@ -26,6 +26,12 @@ export type ViewerRankingSummary = {
   topTenGapLabel: string | null;
 };
 
+export type ViewerWeeklyUsageSummary = {
+  tokens: number;
+  sessions: number;
+  lastUploadAt: string | null;
+};
+
 export type BadgeDefinition = {
   key: string;
   name: string;

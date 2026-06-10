@@ -14,6 +14,7 @@ export default async function RankingPage() {
         entries={rankingData.entries}
         viewerBadges={rankingData.viewerBadges}
         viewerRanking={rankingData.viewerRanking}
+        viewerWeeklyUsage={rankingData.viewerWeeklyUsage}
         viewerShareSlug={rankingData.viewerShareSlug}
       />
     </SiteShell>

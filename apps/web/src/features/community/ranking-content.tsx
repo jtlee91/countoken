@@ -6,7 +6,9 @@ import {
   type RankingEntry,
   type ViewerProfile,
   type ViewerRankingSummary,
+  type ViewerWeeklyUsageSummary,
 } from "@/lib/data/models";
+import { formatTokenAmount } from "@/lib/format/tokens";
 
 function RankMark({ rank }: { rank: number }) {
   if (rank === 1) {
@@ -35,15 +37,28 @@ export function RankingContent({
   entries,
   viewerBadges,
   viewerRanking,
+  viewerWeeklyUsage,
   viewerShareSlug,
 }: {
   viewer?: ViewerProfile | null;
   entries: RankingEntry[];
   viewerBadges: BadgeDefinition[];
   viewerRanking: ViewerRankingSummary | null;
+  viewerWeeklyUsage: ViewerWeeklyUsageSummary | null;
   viewerShareSlug: string | null;
 }) {
   const sharePath = viewerShareSlug ? `/share/${viewerShareSlug}` : null;
+  const viewerScoreLabel =
+    viewerRanking?.scoreLabel ??
+    (viewerWeeklyUsage ? formatTokenAmount(viewerWeeklyUsage.tokens) : "-");
+  const viewerStatusLabel =
+    viewerRanking?.rankMovement ??
+    (viewerWeeklyUsage ? "이번 주 사용량" : "랭킹 집계 대기");
+  const viewerHelperLabel =
+    viewerRanking?.topTenGapLabel ??
+    (viewerWeeklyUsage
+      ? "랭킹은 아직 집계 전이며, 개인 주간 사용량만 표시됩니다."
+      : "실제 사용량 집계 후 개인 랭킹 정보가 표시됩니다.");
 
   return (
     <div
@@ -136,16 +151,15 @@ export function RankingContent({
                     {viewer.displayName}
                   </p>
                   <p className="mt-1 truncate text-xs font-bold text-muted">
-                    {viewerRanking?.rankMovement ?? "랭킹 집계 대기"}
+                    {viewerStatusLabel}
                   </p>
                 </div>
                 <p className="border-l border-border pl-4 font-mono text-xl font-black">
-                  {viewerRanking?.scoreLabel ?? "-"}
+                  {viewerScoreLabel}
                 </p>
               </div>
               <p className="mt-3 text-sm font-bold text-muted">
-                {viewerRanking?.topTenGapLabel ??
-                  "실제 사용량 집계 후 개인 랭킹 정보가 표시됩니다."}
+                {viewerHelperLabel}
               </p>
             </div>
 

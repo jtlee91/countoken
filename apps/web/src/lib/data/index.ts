@@ -13,6 +13,7 @@ const emptyRankingPageData: RankingPageData = {
   entries: [],
   viewerBadges: [],
   viewerRanking: null,
+  viewerWeeklyUsage: null,
   viewerShareSlug: null,
 };
 

@@ -11,6 +11,7 @@ import {
 import type { RankingPageData, TokenPlaneDataProvider } from "@/lib/data/types";
 import {
   summarizeUsageDailyDashboard,
+  summarizeViewerWeeklyUsage,
   type UsageDailyAggregateRow,
   type UsageSessionAggregateRow,
 } from "@/lib/data/usage-session-aggregates";
@@ -158,6 +159,42 @@ async function getUserBadgeRows(userIds: string[]) {
   return data as UserBadgeRow[];
 }
 
+async function getViewerWeeklyUsage(userId?: string) {
+  if (!userId) {
+    return null;
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("usage_daily")
+    .select(
+      [
+        "usage_date",
+        "device_id",
+        "provider",
+        "model",
+        "session_count",
+        "llm_call_count",
+        "input_tokens",
+        "output_tokens",
+        "cache_tokens",
+        "first_used_at",
+        "last_used_at",
+        "local_updated_at",
+        "synced_at",
+      ].join(","),
+    )
+    .eq("user_id", userId)
+    .order("usage_date", { ascending: false })
+    .limit(5000);
+
+  if (error || !data) {
+    return null;
+  }
+
+  return summarizeViewerWeeklyUsage(data as unknown as UsageDailyAggregateRow[]);
+}
+
 export const supabaseDataProvider: TokenPlaneDataProvider = {
   async getDashboardData(viewer): Promise<DashboardData> {
     if (!hasPublicSupabaseEnv() || !viewer.userId) {
@@ -294,29 +331,27 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
         entries: [],
         viewerBadges: [],
         viewerRanking: null,
+        viewerWeeklyUsage: null,
         viewerShareSlug: null,
       };
     }
 
     const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("ranking_snapshots")
-      .select("user_id, rank_position, score")
-      .eq("period", "weekly")
-      .eq("rank_scope", "global")
-      .order("rank_position", { ascending: true })
-      .limit(10);
+    const [rankingResult, viewerWeeklyUsage] = await Promise.all([
+      supabase
+        .from("ranking_snapshots")
+        .select("user_id, rank_position, score")
+        .eq("period", "weekly")
+        .eq("rank_scope", "global")
+        .order("rank_position", { ascending: true })
+        .limit(10),
+      getViewerWeeklyUsage(viewer?.userId),
+    ]);
 
-    if (error || !data || data.length === 0) {
-      return {
-        entries: [],
-        viewerBadges: [],
-        viewerRanking: null,
-        viewerShareSlug: null,
-      };
-    }
-
-    const snapshots = data as RankingSnapshotRow[];
+    const snapshots =
+      rankingResult.error || !rankingResult.data
+        ? []
+        : (rankingResult.data as RankingSnapshotRow[]);
     const userIds = snapshots.map((snapshot) => snapshot.user_id);
     const [profiles, userBadges] = await Promise.all([
       getProfilesByUserId(userIds),
@@ -392,6 +427,7 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
       entries,
       viewerBadges,
       viewerRanking: toViewerRankingSummary(viewerSnapshot),
+      viewerWeeklyUsage,
       viewerShareSlug,
     };
   },

@@ -14,7 +14,9 @@ export function CopyLinkButton({
 
   async function copyUrl() {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(
+        new URL(url, window.location.origin).toString(),
+      );
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {

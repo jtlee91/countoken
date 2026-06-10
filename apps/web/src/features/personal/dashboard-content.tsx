@@ -357,7 +357,7 @@ export function DashboardContent({
                         endedAt={session.endedAt}
                       />
                     </td>
-                    <td className="whitespace-nowrap border-b border-border px-3 py-3 text-center font-mono">
+                    <td className="whitespace-nowrap border-b border-border px-3 py-3 text-center align-top font-mono">
                       <span className="font-black">
                         {numberFormatter.format(session.userTurnCount)}
                       </span>
@@ -366,7 +366,7 @@ export function DashboardContent({
                         {numberFormatter.format(session.llmCallCount)}
                       </span>
                     </td>
-                    <td className="border-b border-border px-3 py-3">
+                    <td className="border-b border-border px-3 py-3 align-top">
                       <UsageCompositionCell
                         inputTokens={session.inputTokens}
                         cacheTokens={session.cacheTokens}

@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 
 import { CopyPromptButton } from "@/features/install/copy-prompt-button";
+import { ExpandablePrompt } from "@/features/install/expandable-prompt";
 import { getSiteUrl } from "@/lib/env";
 
 const BIN_PATH = "~/.mylocalagenttoken/bin/token-agent";
@@ -62,8 +63,7 @@ export function InstallContent() {
   return (
     <div className="space-y-6">
       <section className="rounded-lg border border-border bg-surface p-6">
-        <p className="text-sm font-semibold text-code-blue">Install</p>
-        <h1 className="mt-2 text-3xl font-bold">
+        <h1 className="text-3xl font-bold">
           프롬프트 한 번이면 설치 끝.
         </h1>
         <p className="mt-3 max-w-4xl text-sm font-bold leading-6 text-muted">
@@ -97,9 +97,7 @@ export function InstallContent() {
           </div>
           <CopyPromptButton text={prompt} />
         </div>
-        <pre className="mt-4 overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background p-4 font-mono text-xs font-bold leading-6 text-foreground">
-          {prompt}
-        </pre>
+        <ExpandablePrompt text={prompt} />
       </section>
 
       <section className="rounded-lg border border-border bg-surface p-6">

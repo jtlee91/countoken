@@ -53,7 +53,7 @@ const steps = [
 const privacyPoints = [
   "프롬프트·응답 원문, 프로젝트 경로 등은 수집하지 않습니다. 토큰 수와 세션 메타데이터만 동기화됩니다.",
   "세션 단위 상세 데이터는 로컬 SQLite(~/.mylocalagenttoken)에만 저장됩니다.",
-  "기존 Claude Code / Codex 설정은 병합 방식으로 보존됩니다.",
+  "설치 시 기존 에이전트 설정은 그대로 유지되며, 동기화에 필요한 hook 한가지가 추가됩니다.",
 ];
 
 export function InstallContent() {

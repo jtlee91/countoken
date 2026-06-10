@@ -3,7 +3,7 @@ import { SiteShell } from "@/components/site-shell";
 import { BadgesContent } from "@/features/community/badges-content";
 import { LoginRequired } from "@/features/personal/login-required";
 import { getViewerContext } from "@/lib/auth/viewer";
-import { getBadges } from "@/lib/data";
+import { getBadges, grantEligibleBadges } from "@/lib/data";
 
 export default async function MyBadgesPage() {
   const { viewer } = await getViewerContext();
@@ -19,6 +19,7 @@ export default async function MyBadgesPage() {
     );
   }
 
+  await grantEligibleBadges();
   const badges = await getBadges(viewer);
 
   return (

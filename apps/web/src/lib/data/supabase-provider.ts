@@ -199,6 +199,15 @@ async function getViewerWeeklyUsage(userId?: string) {
   return summarizeViewerWeeklyUsage(data as unknown as UsageDailyAggregateRow[]);
 }
 
+export async function grantEligibleBadgesForViewer() {
+  if (!hasPublicSupabaseEnv()) {
+    return;
+  }
+
+  const supabase = await createClient();
+  await supabase.rpc("grant_eligible_badges");
+}
+
 export const supabaseDataProvider: TokenPlaneDataProvider = {
   async getDashboardData(viewer): Promise<DashboardData> {
     if (!hasPublicSupabaseEnv() || !viewer.userId) {

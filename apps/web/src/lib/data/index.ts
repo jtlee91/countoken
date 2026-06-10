@@ -1,6 +1,9 @@
 import "server-only";
 
-import { supabaseDataProvider } from "@/lib/data/supabase-provider";
+import {
+  grantEligibleBadgesForViewer,
+  supabaseDataProvider,
+} from "@/lib/data/supabase-provider";
 import type { RankingPageData } from "@/lib/data/types";
 import { getDataProviderMode, hasPublicSupabaseEnv } from "@/lib/env";
 import {
@@ -71,6 +74,18 @@ export async function getDashboardData(
     return await supabaseDataProvider.getDashboardData(viewer);
   } catch {
     return emptyDashboardData;
+  }
+}
+
+export async function grantEligibleBadges() {
+  if (!shouldUseSupabaseProvider()) {
+    return;
+  }
+
+  try {
+    await grantEligibleBadgesForViewer();
+  } catch {
+    // 부여 실패는 조회를 막지 않는다
   }
 }
 

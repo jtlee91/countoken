@@ -14,7 +14,7 @@ const rows: UsageSessionAggregateRow[] = [
   {
     session_hash: "codex-today",
     device_id: "device-a",
-    device_label: "Jeongtaekui-MacBookPro.local",
+    device_label: "MacBook-Pro.local",
     provider: "codex",
     started_at: "2026-06-03T01:40:00.000Z",
     ended_at: "2026-06-03T02:00:00.000Z",
@@ -156,7 +156,7 @@ test("summarizeUsageSessions returns recent sessions and daily totals for dashbo
         sessionHash: "codex-today",
         provider: "codex",
         providerLabel: "Codex",
-        deviceLabel: "Jeongtaekui-MacBookPro.local",
+        deviceLabel: "MacBook-Pro.local",
         totalTokens: 1000,
       },
       {

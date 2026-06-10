@@ -316,10 +316,10 @@ export function DashboardContent({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] table-fixed border-separate border-spacing-0 text-left text-sm">
               <colgroup>
-                <col className="w-[25%]" />
-                <col className="w-[17%]" />
-                <col className="w-[16%]" />
-                <col className="w-[42%]" />
+                <col className="w-[23%]" />
+                <col className="w-[23%]" />
+                <col className="w-[15%]" />
+                <col className="w-[39%]" />
               </colgroup>
               <thead>
                 <tr className="text-xs font-extrabold uppercase text-muted">

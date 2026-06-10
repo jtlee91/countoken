@@ -1,245 +1,129 @@
 import {
-  CheckCircle2,
-  Copy,
-  KeyRound,
-  Lock,
+  ClipboardPaste,
+  Globe,
   ShieldCheck,
   TerminalSquare,
-  TriangleAlert,
 } from "lucide-react";
-import Link from "next/link";
 
-import { MacbookInstallGenerator } from "@/features/install/codex-install-generator";
-import type { ViewerProfile } from "@/lib/data/models";
+import { CopyPromptButton } from "@/features/install/copy-prompt-button";
+import { getSiteUrl } from "@/lib/env";
 
-const agents = [
-  {
-    name: "Claude Code",
-    type: "claude_code",
-    support: "공식 지원",
-    trigger: "SessionStart + Stop hook",
-    wrapper: "token-plane-claude-code.sh",
-    status: "설치 프롬프트 생성 가능",
-    tone: "green",
-  },
-  {
-    name: "Codex",
-    type: "codex",
-    support: "공식 지원",
-    trigger: "SessionStart + Stop hook",
-    wrapper: "token-plane-codex.sh",
-    status: "설치 프롬프트 생성 가능",
-    tone: "blue",
-  },
-  {
-    name: "Opencode",
-    type: "opencode",
-    support: "베타 준비 중",
-    trigger: "message.updated + session.idle plugin event",
-    wrapper: "token-plane.sh / token-plane.ps1",
-    status: "preparing",
-    tone: "amber",
-  },
-];
+const BIN_PATH = "~/.mylocalagenttoken/bin/token-agent";
 
-const safeFields = [
-  "agent_type",
-  "anonymized_session_id",
-  "turn_started_at / turn_completed_at",
-  "timezone",
-  "input_tokens / output_tokens",
-  "cache",
-  "message_count",
-  "collector_version",
-  "event_fingerprint",
-];
+function buildInstallPrompt(siteUrl: string) {
+  return `Token Plane 로컬 토큰 사용량 추적기를 이 컴퓨터에 설치해줘. 아래 단계를 순서대로 실행해.
 
-function badgeClass(tone: string) {
-  if (tone === "green") {
-    return "border-token-green/30 bg-token-green/10 text-token-green";
-  }
+1. 설치 스크립트 실행:
+   curl -fsSL ${siteUrl}/install.sh | bash
+   이 스크립트는 ~/.mylocalagenttoken 아래에 token-agent 바이너리와 훅 스크립트를 설치하고, Claude Code(~/.claude/settings.json)와 Codex(~/.codex/config.toml)에 Stop 훅을 등록해. 기존 설정은 병합 방식으로 보존되고, 이미 설치돼 있으면 중복 등록 없이 넘어가.
 
-  if (tone === "blue") {
-    return "border-code-blue/30 bg-code-blue/10 text-code-blue";
-  }
+2. 로그인 실행 (명령 타임아웃을 6분 이상으로 설정):
+   ${BIN_PATH} login
+   이 명령은 브라우저를 자동으로 열고 로그인 완료까지 기다려. 명령을 시작하면 나에게 "브라우저에서 Google 로그인을 완료해주세요"라고 안내해줘. 브라우저가 열리지 않으면 명령이 출력한 URL을 나에게 보여줘.
 
-  return "border-warm-amber/30 bg-warm-amber/10 text-warm-amber";
+3. 설치 검증:
+   ${BIN_PATH} inspect --quiet && ${BIN_PATH} sync --quiet
+   둘 다 성공하면 "설치 완료"와 함께 로그인 결과로 출력된 디바이스 정보를 간단히 요약해줘.
+
+주의: ~/.mylocalagenttoken/auth.json의 내용, 액세스 토큰, 그 외 어떤 시크릿 값도 출력하거나 다른 곳에 저장하지 마.`;
 }
 
-export function InstallContent({ viewer }: { viewer?: ViewerProfile | null }) {
+const steps = [
+  {
+    icon: ClipboardPaste,
+    title: "1. 프롬프트 복사 & 붙여넣기",
+    description:
+      "아래 설치 프롬프트를 복사해서 Claude Code 또는 Codex에 붙여넣으세요. 에이전트가 다운로드부터 훅 등록까지 전부 처리합니다.",
+  },
+  {
+    icon: Globe,
+    title: "2. Google 로그인",
+    description:
+      "설치 중 브라우저가 자동으로 열립니다. Google 계정으로 로그인하면 이 기기가 내 계정에 연결됩니다.",
+  },
+  {
+    icon: TerminalSquare,
+    title: "3. 끝. 자동 동기화",
+    description:
+      "이후 에이전트 응답이 끝날 때마다 토큰 사용량이 자동으로 수집·동기화됩니다. 대시보드에서 바로 확인하세요.",
+  },
+];
+
+const privacyPoints = [
+  "프롬프트·응답 원문, 프로젝트 경로 등은 수집하지 않습니다. 토큰 수와 세션 메타데이터만 동기화됩니다.",
+  "세션 단위 상세 데이터는 로컬 SQLite(~/.mylocalagenttoken)에만 저장됩니다.",
+  "기존 Claude Code / Codex 설정은 병합 방식으로 보존됩니다.",
+];
+
+export function InstallContent() {
+  const siteUrl = getSiteUrl().replace(/\/$/, "");
+  const prompt = buildInstallPrompt(siteUrl);
+
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
-        <div className="rounded-lg border border-border bg-surface p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-code-blue">
-                공개 Install
-              </p>
-              <h1 className="mt-2 text-3xl font-bold">
-                에이전트가 설치하는 흐름입니다.
-              </h1>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-muted">
-                Claude Code와 Codex에 붙여넣을 설치 프롬프트를 생성합니다. 사용자가
-                직접 명령어를 옮겨 실행하지 않고 코드 에이전트가 로컬 설치와 설정
-                병합을 처리합니다.
+      <section className="rounded-lg border border-border bg-surface p-6">
+        <p className="text-sm font-semibold text-code-blue">Install</p>
+        <h1 className="mt-2 text-3xl font-bold">
+          프롬프트 한 번이면 설치 끝.
+        </h1>
+        <p className="mt-3 max-w-2xl text-sm font-bold leading-6 text-muted">
+          코드 에이전트에게 설치를 맡기세요. 복사한 프롬프트를 붙여넣으면
+          에이전트가 설치하고, Google 로그인 한 번으로 연결이 완료됩니다.
+        </p>
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {steps.map((step) => (
+            <div
+              key={step.title}
+              className="rounded-md border border-border bg-background p-4"
+            >
+              <step.icon className="h-5 w-5 text-token-green" />
+              <p className="mt-3 text-sm font-black">{step.title}</p>
+              <p className="mt-2 text-xs font-bold leading-5 text-muted">
+                {step.description}
               </p>
             </div>
-            <Link
-              href={viewer ? "/me/settings" : "/login"}
-              className="inline-flex min-h-10 items-center gap-2 rounded-md bg-code-blue px-4 text-sm font-bold text-white hover:bg-[#1d4ed8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-token-green"
-            >
-              <KeyRound size={17} aria-hidden="true" />
-              {viewer ? "개인화 준비" : "로그인 후 개인화"}
-            </Link>
-          </div>
-
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            {agents.map((agent) => (
-              <article
-                key={agent.type}
-                className="rounded-lg border border-border bg-background p-4"
-              >
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <TerminalSquare className="text-code-blue" size={24} />
-                  <span
-                    className={`rounded-md border px-2 py-1 text-xs font-bold ${badgeClass(agent.tone)}`}
-                  >
-                    {agent.support}
-                  </span>
-                </div>
-                <h2 className="text-lg font-bold">{agent.name}</h2>
-                <dl className="mt-4 grid gap-3 text-sm">
-                  <div>
-                    <dt className="font-semibold text-muted">자동 실행 지점</dt>
-                    <dd className="mt-1 font-semibold">{agent.trigger}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold text-muted">wrapper</dt>
-                    <dd className="mt-1 font-mono text-xs font-semibold">
-                      {agent.wrapper}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="font-semibold text-muted">상태</dt>
-                    <dd className="mt-1 font-semibold">{agent.status}</dd>
-                  </div>
-                </dl>
-              </article>
-            ))}
-          </div>
+          ))}
         </div>
-
-        <aside className="rounded-lg border border-border bg-surface p-5">
-          <div className="flex items-center gap-2">
-            <Lock className="text-warm-amber" size={22} />
-            <h2 className="text-lg font-bold">로그인 후 열리는 영역</h2>
-          </div>
-          <div className="mt-4 grid gap-3">
-            {[
-              "Claude Code 설치 프롬프트",
-              "Codex 설치 프롬프트",
-              "device UUID",
-              "write-only ingest credential",
-              "설정과 연결 해제",
-            ].map((item) => (
-              <div
-                key={item}
-                className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm font-semibold"
-              >
-                <CheckCircle2
-                  className="shrink-0 text-token-green"
-                  size={17}
-                  aria-hidden="true"
-                />
-                {item}
-              </div>
-            ))}
-          </div>
-        </aside>
       </section>
 
-      {viewer ? (
-        <MacbookInstallGenerator />
-      ) : (
-        <section className="rounded-lg border border-border bg-surface p-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-extrabold text-code-blue">
-                Claude Code + Codex
-              </p>
-              <h2 className="mt-1 text-2xl font-black">
-                설치 프롬프트는 로그인 후 생성됩니다.
-              </h2>
-              <p className="mt-2 text-sm font-semibold leading-6 text-muted">
-                device UUID, write-only ingest credential, local HMAC secret은
-                계정 세션이 확인된 뒤에만 발급됩니다.
-              </p>
-            </div>
-            <Link
-              href="/login"
-              className="inline-flex min-h-10 items-center gap-2 rounded-md bg-code-blue px-4 text-sm font-bold text-white hover:bg-[#1d4ed8] focus-visible:outline focus-visible:outline-2 focus-visible:outline-token-green"
-            >
-              <KeyRound size={17} aria-hidden="true" />
-              로그인
-            </Link>
-          </div>
-        </section>
-      )}
-
-      <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <article className="rounded-lg border border-border bg-surface p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <Copy className="text-code-blue" size={22} />
-            <h2 className="text-lg font-bold">일반 wrapper 흐름</h2>
-          </div>
-          <pre className="overflow-x-auto rounded-lg border border-border bg-[#101a14] p-4 font-mono text-sm leading-7 text-white">
-            <code>{`agent hook/statusLine/plugin
--> thin OS wrapper
--> portable local collector
--> local SQLite outbox
--> sync uploader`}</code>
-          </pre>
-          <p className="mt-4 text-sm leading-6 text-muted">
-            wrapper는 복잡한 파싱을 하지 않고 collector와 sync uploader만
-            호출합니다. sync 재시도는 다음 agent lifecycle에서만 실행됩니다.
-          </p>
-        </article>
-
-        <article className="rounded-lg border border-border bg-surface p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <ShieldCheck className="text-token-green" size={22} />
-            <h2 className="text-lg font-bold">허용 upload 필드</h2>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {safeFields.map((field) => (
-              <div
-                key={field}
-                className="rounded-md border border-border bg-background px-3 py-2 font-mono text-xs font-semibold"
-              >
-                {field}
-              </div>
-            ))}
-          </div>
-        </article>
-      </section>
-
-      <section className="rounded-lg border border-alert-red/30 bg-alert-red/5 p-5">
-        <div className="flex items-start gap-3">
-          <TriangleAlert
-            className="mt-1 shrink-0 text-alert-red"
-            size={22}
-            aria-hidden="true"
-          />
+      <section className="rounded-lg border border-border bg-surface p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold">업로드 중단 조건</h2>
-            <p className="mt-2 text-sm leading-6 text-muted">
-              prompt, response, cwd, transcript_path, raw JSON line, 파일 경로,
-              프로젝트명, git 정보, API key, OAuth token이 payload에 섞이면
-              저장하지 않습니다.
+            <h2 className="text-xl font-black">설치 프롬프트</h2>
+            <p className="mt-1 text-sm font-bold text-muted">
+              Claude Code와 Codex 어느 쪽에 붙여넣어도 두 에이전트 모두
+              설정됩니다.
             </p>
           </div>
+          <CopyPromptButton text={prompt} />
         </div>
+        <pre className="mt-4 overflow-x-auto whitespace-pre-wrap rounded-md border border-border bg-background p-4 font-mono text-xs font-bold leading-6 text-foreground">
+          {prompt}
+        </pre>
+      </section>
+
+      <section className="rounded-lg border border-border bg-surface p-6">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-token-green" />
+          <h2 className="text-xl font-black">무엇이 수집되나요?</h2>
+        </div>
+        <ul className="mt-4 space-y-2">
+          {privacyPoints.map((point) => (
+            <li
+              key={point}
+              className="flex items-start gap-2 text-sm font-bold leading-6 text-muted"
+            >
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-token-green" />
+              {point}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 rounded-md border border-dashed border-border bg-background p-3 text-xs font-bold leading-5 text-muted">
+          터미널에서 직접 설치하려면:{" "}
+          <code className="font-mono">
+            curl -fsSL {siteUrl}/install.sh | bash && {BIN_PATH} login
+          </code>
+        </p>
       </section>
     </div>
   );

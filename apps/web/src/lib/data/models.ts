@@ -114,6 +114,8 @@ export type DashboardData = {
   monthlyTurns: number;
   monthlyLLMCalls: number;
   monthlySessions: number;
+  prevWeekTokens: number;
+  prevMonthTokens: number;
   connectedDevices: number;
   weeklyRank: number | null;
   weeklyRankScore: number | null;

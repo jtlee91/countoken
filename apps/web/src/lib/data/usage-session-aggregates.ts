@@ -132,6 +132,15 @@ function startOfKoreaMonth(now: Date) {
   );
 }
 
+function startOfKoreaPrevMonth(now: Date) {
+  const koreaNow = toKoreaDate(now);
+
+  return new Date(
+    Date.UTC(koreaNow.getUTCFullYear(), koreaNow.getUTCMonth() - 1, 1) -
+      KOREA_OFFSET_MS,
+  );
+}
+
 function maxTimestamp(...values: Array<string | null | undefined>) {
   const timestamps = values.filter((value): value is string => Boolean(value));
 
@@ -261,6 +270,10 @@ export function summarizeUsageDailyDashboard(
   const todayKey = koreaDateKey(startOfKoreaToday(now));
   const weekStartKey = koreaDateKey(startOfKoreaWeek(now));
   const monthStartKey = koreaDateKey(startOfKoreaMonth(now));
+  const prevWeekStartKey = koreaDateKey(
+    new Date(startOfKoreaWeek(now).getTime() - 7 * DAY_MS),
+  );
+  const prevMonthStartKey = koreaDateKey(startOfKoreaPrevMonth(now));
   const tokenBreakdown = emptyBreakdown();
   const dailyUsage = makeDailyUsage(now);
   const dailyUsageByDate = new Map(dailyUsage.map((day) => [day.date, day]));
@@ -277,6 +290,8 @@ export function summarizeUsageDailyDashboard(
   let monthlyTokens = 0;
   let monthlySessions = 0;
   let monthlyLLMCalls = 0;
+  let prevWeekTokens = 0;
+  let prevMonthTokens = 0;
   let lastUploadAt: string | null = null;
 
   for (const row of rows) {
@@ -309,6 +324,14 @@ export function summarizeUsageDailyDashboard(
       monthlyTokens += rowTotal;
       monthlySessions += row.session_count;
       monthlyLLMCalls += row.llm_call_count;
+    }
+
+    if (usageDate >= prevWeekStartKey && usageDate < weekStartKey) {
+      prevWeekTokens += rowTotal;
+    }
+
+    if (usageDate >= prevMonthStartKey && usageDate < monthStartKey) {
+      prevMonthTokens += rowTotal;
     }
 
     const daily = dailyUsageByDate.get(usageDate);
@@ -359,6 +382,8 @@ export function summarizeUsageDailyDashboard(
     monthlyTurns: 0,
     monthlyLLMCalls,
     monthlySessions,
+    prevWeekTokens,
+    prevMonthTokens,
     connectedDevices: devices.size,
     weeklyRank: null,
     weeklyRankScore: null,
@@ -404,6 +429,8 @@ export function summarizeUsageSessions(
   const todayStart = startOfKoreaToday(now);
   const weekStart = startOfKoreaWeek(now);
   const monthStart = startOfKoreaMonth(now);
+  const prevWeekStart = new Date(weekStart.getTime() - 7 * DAY_MS);
+  const prevMonthStart = startOfKoreaPrevMonth(now);
   const tokenBreakdown = emptyBreakdown();
   const dailyUsage = makeDailyUsage(now);
   const dailyUsageByDate = new Map(dailyUsage.map((day) => [day.date, day]));
@@ -421,6 +448,8 @@ export function summarizeUsageSessions(
   let monthlyTurns = 0;
   let monthlySessions = 0;
   let monthlyLLMCalls = 0;
+  let prevWeekTokens = 0;
+  let prevMonthTokens = 0;
   let lastUploadAt: string | null = null;
 
   for (const row of rows) {
@@ -448,6 +477,14 @@ export function summarizeUsageSessions(
       monthlyTurns += row.user_turn_count;
       monthlySessions += 1;
       monthlyLLMCalls += row.llm_call_count;
+    }
+
+    if (endedAt >= prevWeekStart && endedAt < weekStart) {
+      prevWeekTokens += rowTotal;
+    }
+
+    if (endedAt >= prevMonthStart && endedAt < monthStart) {
+      prevMonthTokens += rowTotal;
     }
 
     const dateKey = koreaDateKey(endedAt);
@@ -499,6 +536,8 @@ export function summarizeUsageSessions(
     monthlyTurns,
     monthlyLLMCalls,
     monthlySessions,
+    prevWeekTokens,
+    prevMonthTokens,
     connectedDevices: 0,
     weeklyRank: null,
     weeklyRankScore: null,

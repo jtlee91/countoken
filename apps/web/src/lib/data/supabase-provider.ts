@@ -214,6 +214,8 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
         monthlyTurns: 0,
         monthlyLLMCalls: 0,
         monthlySessions: 0,
+        prevWeekTokens: 0,
+        prevMonthTokens: 0,
         connectedDevices: 0,
         weeklyRank: null,
         weeklyRankScore: null,

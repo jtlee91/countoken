@@ -161,22 +161,81 @@ function CompositionDonut({
   );
 }
 
+function periodDelta(current: number, previous: number, vsLabel: string) {
+  if (previous <= 0) {
+    return null;
+  }
+
+  const percent = Math.round(((current - previous) / previous) * 100);
+  return {
+    up: percent >= 0,
+    label: `${percent >= 0 ? "▲" : "▼"} ${Math.abs(percent)}% vs ${vsLabel}`,
+  };
+}
+
 function todayDelta(dailyUsage: DashboardData["dailyUsage"]) {
   if (dailyUsage.length < 2) {
     return null;
   }
 
-  const today = dailyUsage[dailyUsage.length - 1].totalTokens;
-  const yesterday = dailyUsage[dailyUsage.length - 2].totalTokens;
-  if (yesterday <= 0) {
+  return periodDelta(
+    dailyUsage[dailyUsage.length - 1].totalTokens,
+    dailyUsage[dailyUsage.length - 2].totalTokens,
+    "어제",
+  );
+}
+
+function DeltaLine({
+  delta,
+}: {
+  delta: { up: boolean; label: string } | null;
+}) {
+  if (!delta) {
     return null;
   }
 
-  const percent = Math.round(((today - yesterday) / yesterday) * 100);
-  return {
-    up: percent >= 0,
-    label: `${percent >= 0 ? "▲" : "▼"} ${Math.abs(percent)}% vs 어제`,
-  };
+  return (
+    <p
+      className={
+        delta.up
+          ? "mt-1.5 text-xs font-extrabold text-token-green"
+          : "mt-1.5 text-xs font-extrabold text-alert-red"
+      }
+    >
+      {delta.label}
+    </p>
+  );
+}
+
+function CountsRow({
+  sessions,
+  prompts,
+  llmCalls,
+}: {
+  sessions: number;
+  prompts: number;
+  llmCalls: number;
+}) {
+  const items = [
+    { label: "세션", value: formatCount(sessions) },
+    { label: "프롬프트", value: formatCount(prompts) },
+    { label: "LLM 호출", value: formatCount(llmCalls) },
+  ];
+
+  return (
+    <div className="mt-2 grid grid-cols-3 gap-2">
+      {items.map((item) => (
+        <div key={item.label}>
+          <p className="font-mono text-[13px] font-black leading-none">
+            {item.value}
+          </p>
+          <p className="mt-1 text-[10px] font-extrabold text-muted">
+            {item.label}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function DashboardContent({
@@ -212,34 +271,46 @@ export function DashboardContent({
     {
       label: "오늘",
       value: formatTokenAmount(dashboard.todayTokens),
-      helper: delta ? (
-        <span className={delta.up ? "text-token-green" : "text-alert-red"}>
-          {delta.label}
-        </span>
-      ) : (
-        "KST 기준 오늘 사용량"
-      ),
+      delta,
+      counts: null,
     },
     {
       label: "이번 주",
       value: formatTokenAmount(dashboard.weeklyTokens),
-      helper: `세션 ${formatCount(dashboard.weeklySessions)} · 프롬프트 ${formatCount(
-        dashboard.weeklyTurns,
-      )} · LLM 호출 ${formatCount(dashboard.weeklyLLMCalls)}`,
+      delta: periodDelta(
+        dashboard.weeklyTokens,
+        dashboard.prevWeekTokens,
+        "지난 주",
+      ),
+      counts: {
+        sessions: dashboard.weeklySessions,
+        prompts: dashboard.weeklyTurns,
+        llmCalls: dashboard.weeklyLLMCalls,
+      },
     },
     {
       label: "이번 달",
       value: formatTokenAmount(dashboard.monthlyTokens),
-      helper: `세션 ${formatCount(dashboard.monthlySessions)} · 프롬프트 ${formatCount(
-        dashboard.monthlyTurns,
-      )} · LLM 호출 ${formatCount(dashboard.monthlyLLMCalls)}`,
+      delta: periodDelta(
+        dashboard.monthlyTokens,
+        dashboard.prevMonthTokens,
+        "지난 달",
+      ),
+      counts: {
+        sessions: dashboard.monthlySessions,
+        prompts: dashboard.monthlyTurns,
+        llmCalls: dashboard.monthlyLLMCalls,
+      },
     },
     {
       label: "전체",
       value: formatTokenAmount(dashboard.totalTokens),
-      helper: `세션 ${formatCount(dashboard.activeSessions)} · 프롬프트 ${formatCount(
-        dashboard.activeTurns,
-      )} · LLM 호출 ${formatCount(dashboard.totalLLMCalls)}`,
+      delta: null,
+      counts: {
+        sessions: dashboard.activeSessions,
+        prompts: dashboard.activeTurns,
+        llmCalls: dashboard.totalLLMCalls,
+      },
     },
   ];
 
@@ -287,9 +358,14 @@ export function DashboardContent({
               <p className="mt-1.5 font-mono text-[34px] font-black leading-tight">
                 {metric.value}
               </p>
-              <p className="mt-1 text-xs font-extrabold text-muted">
-                {metric.helper}
-              </p>
+              <DeltaLine delta={metric.delta} />
+              {metric.counts ? (
+                <CountsRow
+                  sessions={metric.counts.sessions}
+                  prompts={metric.counts.prompts}
+                  llmCalls={metric.counts.llmCalls}
+                />
+              ) : null}
             </div>
           ))}
         </div>

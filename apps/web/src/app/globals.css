@@ -42,6 +42,9 @@ body {
   color: var(--foreground);
   font-family: Pretendard, Inter, ui-sans-serif, system-ui, sans-serif;
   letter-spacing: 0;
+  /* Wrap Korean text on word boundaries; break-word keeps long tokens from overflowing */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 a {

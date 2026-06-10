@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    remotePatterns: [
+      // Google OAuth 프로필 이미지
+      { protocol: "https", hostname: "*.googleusercontent.com" },
+    ],
+  },
 };
 
 export default nextConfig;

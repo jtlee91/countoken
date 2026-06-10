@@ -3,12 +3,13 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { ViewerAvatar } from "@/components/viewer-avatar";
 import { signOutAction } from "@/lib/auth/actions";
 import type { ViewerProfile } from "@/lib/data/models";
 
 const navigationItems = [
-  { href: "/ranking", label: "Ranking" },
-  { href: "/install", label: "Install" },
+  { href: "/ranking", label: "랭킹" },
+  { href: "/install", label: "설치" },
 ];
 
 export function SiteShell({
@@ -71,11 +72,9 @@ export function SiteShell({
                 <Link
                   href="/me/dashboard"
                   className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-extrabold text-foreground hover:border-token-green hover:bg-token-green/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
-                  aria-label={`${viewer.displayName}의 My Page`}
+                  aria-label={`${viewer.displayName}의 마이페이지`}
                 >
-                  <span className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-token-green to-code-blue text-sm font-black text-white">
-                    {viewer.initial}
-                  </span>
+                  <ViewerAvatar viewer={viewer} size={32} />
                   <span>{viewer.displayName}</span>
                 </Link>
                 {viewer.source === "supabase" ? (

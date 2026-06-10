@@ -1,12 +1,13 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { ViewerAvatar } from "@/components/viewer-avatar";
 import type { ViewerProfile } from "@/lib/data/models";
 
 const tabs = [
-  { href: "/me/dashboard", label: "Dashboard", key: "dashboard" },
-  { href: "/me/badges", label: "Badges", key: "badges" },
-  { href: "/me/settings", label: "Settings", key: "settings" },
+  { href: "/me/dashboard", label: "대시보드", key: "dashboard" },
+  { href: "/me/badges", label: "배지", key: "badges" },
+  { href: "/me/settings", label: "설정", key: "settings" },
 ] as const;
 
 export function MyPageShell({
@@ -23,17 +24,10 @@ export function MyPageShell({
       <aside className="self-start rounded-lg border border-border bg-surface p-4 lg:sticky lg:top-24">
         <div className="border-b border-border px-1 pb-4">
           <div className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-full bg-gradient-to-br from-token-green to-code-blue text-sm font-black text-white">
-              {viewer.initial}
-            </span>
-            <div>
-              <strong className="block text-sm font-black">
-                {viewer.displayName}
-              </strong>
-              <span className="mt-0.5 block text-xs font-bold text-muted">
-                Supabase account
-              </span>
-            </div>
+            <ViewerAvatar viewer={viewer} size={36} />
+            <strong className="block truncate text-sm font-black">
+              {viewer.displayName}
+            </strong>
           </div>
         </div>
         <nav aria-label="My Page 탭" className="mt-4 grid gap-2 lg:grid-cols-1">

@@ -168,7 +168,7 @@ export function RankingContent({
       <article className="rounded-lg border border-border bg-surface p-5 shadow-[0_18px_45px_rgba(29,45,37,0.08)]">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-extrabold text-token-green">Ranking</p>
+            <p className="text-sm font-extrabold text-token-green">랭킹</p>
             <h1 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
               Global weekly
             </h1>

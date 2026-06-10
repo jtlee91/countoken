@@ -205,7 +205,7 @@ export function DashboardContent({
         <div className="flex flex-wrap items-start justify-between gap-4 px-6 pt-6">
           <div>
             <p className="text-sm font-extrabold text-token-green">
-              My Page · Dashboard
+              마이페이지 · 대시보드
             </p>
             <h1 className="mt-1.5 text-[28px] font-black tracking-normal">
               {viewer.displayName}의 개인 토큰 흐름

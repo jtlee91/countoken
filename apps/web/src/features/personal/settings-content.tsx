@@ -128,7 +128,7 @@ export function SettingsContent({
     <div className="space-y-5">
       <section className="rounded-lg border border-border bg-surface p-5 shadow-[0_18px_45px_rgba(29,45,37,0.08)]">
         <p className="text-sm font-extrabold text-token-green">
-          My Page · Settings
+          마이페이지 · 설정
         </p>
         <h1 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
           계정과 공개 범위

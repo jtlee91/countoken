@@ -33,11 +33,21 @@ function makeDefaultDisplayName(user: User) {
   return `Pilot ${user.id.slice(0, 4)}`;
 }
 
-function toViewer(profile: ProfileRow, userId: string): ViewerProfile {
+function makeAvatarUrl(user: User) {
+  const metadataAvatar =
+    user.user_metadata?.avatar_url || user.user_metadata?.picture;
+
+  return typeof metadataAvatar === "string" && metadataAvatar.trim()
+    ? metadataAvatar.trim()
+    : null;
+}
+
+function toViewer(profile: ProfileRow, user: User): ViewerProfile {
   return {
-    userId,
+    userId: user.id,
     displayName: profile.display_name,
     initial: makeInitial(profile.display_name),
+    avatarUrl: makeAvatarUrl(user),
     rankingOptIn: profile.ranking_opt_in,
     source: "supabase",
   };
@@ -100,7 +110,7 @@ export async function getAuthenticatedViewer(): Promise<ViewerProfile | null> {
       return null;
     }
 
-    return toViewer(profile, user.id);
+    return toViewer(profile, user);
   } catch {
     return null;
   }

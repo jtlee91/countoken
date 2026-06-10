@@ -89,7 +89,7 @@ export function BadgesContent({
       <section className="flex flex-wrap items-center justify-between gap-8 rounded-lg border border-border bg-surface p-5 shadow-[0_18px_45px_rgba(29,45,37,0.08)]">
         <div>
           <p className="text-sm font-extrabold text-token-green">
-            My Page · Badges
+            마이페이지 · 배지
           </p>
           <h1 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
             {viewer.displayName}의 배지 컬렉션

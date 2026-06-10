@@ -2,6 +2,7 @@ export type ViewerProfile = {
   userId?: string;
   displayName: string;
   initial: string;
+  avatarUrl?: string | null;
   publicSlug?: string;
   rankPosition?: number;
   rankMovement?: string;

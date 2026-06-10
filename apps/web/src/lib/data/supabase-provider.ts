@@ -232,8 +232,13 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
     }
 
     const supabase = await createClient();
-    const [dailyResult, sessionsResult, rankingResult, turnTotalsResult] =
-      await Promise.all([
+    const [
+      dailyResult,
+      sessionsResult,
+      rankingResult,
+      turnTotalsResult,
+      providerTurnsResult,
+    ] = await Promise.all([
         supabase
         .from("usage_daily")
         .select(
@@ -279,6 +284,7 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
         .limit(5),
         getWeeklyRankingRows(),
         supabase.rpc("get_turn_totals"),
+        supabase.rpc("get_provider_turn_totals"),
       ]);
 
     const turnTotals =
@@ -326,8 +332,19 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
       recentSessionLimit: 5,
     });
 
+    const providerTurns = new Map(
+      ((providerTurnsResult.data ?? []) as {
+        provider: string;
+        total_turns: number;
+      }[]).map((row) => [row.provider, row.total_turns]),
+    );
+
     return {
       ...dashboard,
+      agents: dashboard.agents.map((agent) => ({
+        ...agent,
+        activeTurns: providerTurns.get(agent.agentType) ?? agent.activeTurns,
+      })),
       activeTurns: turnTotals?.total_turns ?? 0,
       weeklyTurns: turnTotals?.weekly_turns ?? 0,
       monthlyTurns: turnTotals?.monthly_turns ?? 0,

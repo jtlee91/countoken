@@ -348,8 +348,9 @@ export function DashboardContent({
                     />
                     <div className="flex items-center justify-between text-[11px] font-bold text-muted">
                       <span>
-                        {numberFormatter.format(agent.sessions)} sessions ·{" "}
-                        {numberFormatter.format(agent.llmCalls)} calls
+                        세션 {formatCount(agent.sessions)} · 프롬프트{" "}
+                        {formatCount(agent.activeTurns)} · LLM 호출{" "}
+                        {formatCount(agent.llmCalls)}
                       </span>
                       <span>전체의 {shareLabel}%</span>
                     </div>

@@ -1,6 +1,7 @@
 import Image from "next/image";
 
 import { CopyLinkButton } from "@/components/copy-link-button";
+import { CreateShareLinkButton } from "@/features/community/create-share-link-button";
 import {
   type BadgeDefinition,
   type RankingEntry,
@@ -201,9 +202,7 @@ export function RankingContent({
             {sharePath ? (
               <CopyLinkButton url={sharePath} />
             ) : (
-              <p className="rounded-md border border-dashed border-border bg-background px-3 py-2 text-sm font-bold text-muted">
-                공유 카드는 실제 share card가 생성된 뒤 사용할 수 있습니다.
-              </p>
+              <CreateShareLinkButton />
             )}
           </div>
         </aside>

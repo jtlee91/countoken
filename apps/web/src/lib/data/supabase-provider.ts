@@ -55,11 +55,6 @@ async function getWeeklyRankingRows() {
   return data as WeeklyRankingRow[];
 }
 
-type ProfileRow = {
-  user_id: string;
-  display_name: string;
-};
-
 type UserBadgeRow = {
   user_id: string;
   badge_id: string;
@@ -67,11 +62,20 @@ type UserBadgeRow = {
   evidence_summary: string;
 };
 
-type ShareCardRow = {
-  user_id: string;
-  public_slug: string;
-  card_type: string;
-  expires_at: string | null;
+type ShareCardRpcRow = {
+  display_name: string | null;
+  avatar_style: string | null;
+  rank_position: number | null;
+  total_tokens: number | null;
+  badges:
+    | {
+        key: string;
+        name: string;
+        description: string;
+        icon_path: string;
+        earned_at: string;
+      }[]
+    | null;
 };
 
 type UsageDeviceRow = {
@@ -124,24 +128,6 @@ async function getBadgeRowsById(ids: string[]) {
   }
 
   return new Map((data as BadgeRow[]).map((badge) => [badge.id, badge]));
-}
-
-async function getProfilesByUserId(userIds: string[]) {
-  if (userIds.length === 0) {
-    return new Map<string, ProfileRow>();
-  }
-
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("user_id, display_name")
-    .in("user_id", userIds);
-
-  if (error || !data) {
-    return new Map<string, ProfileRow>();
-  }
-
-  return new Map((data as ProfileRow[]).map((profile) => [profile.user_id, profile]));
 }
 
 async function getUserBadgeRows(userIds: string[]) {
@@ -384,19 +370,15 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
               : "Top 10 진입까지 집계 대기 중입니다.",
         }
       : null;
-    const viewerShareSlug =
-      viewer?.userId && viewerRow
-        ? ((
-            await supabase
-              .from("share_cards")
-              .select("public_slug")
-              .eq("user_id", viewer.userId)
-              .eq("card_type", "ranking")
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle<{ public_slug: string }>()
-          ).data?.public_slug ?? null)
-        : null;
+    const viewerShareSlug = viewer?.userId
+      ? ((
+          await supabase
+            .from("profiles")
+            .select("public_slug")
+            .eq("user_id", viewer.userId)
+            .maybeSingle<{ public_slug: string | null }>()
+        ).data?.public_slug ?? null)
+      : null;
 
     return {
       entries,
@@ -438,53 +420,36 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
     }
 
     const supabase = await createClient();
-    const { data: card, error: cardError } = await supabase
-      .from("share_cards")
-      .select("user_id, public_slug, card_type, expires_at")
-      .eq("public_slug", publicSlug)
-      .maybeSingle<ShareCardRow>();
+    const { data, error } = await supabase.rpc("get_share_card", {
+      slug: publicSlug,
+    });
 
-    if (cardError || !card) {
+    if (error || !data) {
       return null;
     }
 
-    const [profiles, rankingResult, grants] = await Promise.all([
-      getProfilesByUserId([card.user_id]),
-      supabase
-        .from("ranking_snapshots")
-        .select("rank_position, score")
-        .eq("user_id", card.user_id)
-        .eq("period", "weekly")
-        .eq("rank_scope", "global")
-        .order("calculated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle<{ rank_position: number; score: number }>(),
-      getUserBadgeRows([card.user_id]),
-    ]);
-    const badgeRows = await getBadgeRowsById([
-      ...new Set(grants.map((grant) => grant.badge_id)),
-    ]);
-    const ranking = rankingResult.data;
+    const row = (data as ShareCardRpcRow[])[0];
 
-    const shareBadges = grants
-      .map((grant) => {
-        const badge = badgeRows.get(grant.badge_id);
-        return badge ? toBadgeDefinition(badge, grant) : null;
-      })
-      .filter((badge): badge is BadgeDefinition => Boolean(badge));
-
-    const profile = profiles.get(card.user_id);
-
-    if (!profile) {
+    if (!row?.display_name) {
       return null;
     }
+
+    const shareBadges: BadgeDefinition[] = (row.badges ?? []).map((badge) => ({
+      key: badge.key,
+      name: badge.name,
+      description: badge.description,
+      iconPath: badge.icon_path,
+      earnedAt: formatEarnedAt(badge.earned_at),
+      progress: badge.description,
+    }));
 
     const shareCard: ShareCard = {
-      publicSlug: card.public_slug,
-      displayName: profile.display_name,
+      publicSlug,
+      displayName: row.display_name,
       periodLabel: "Global weekly",
-      rankPosition: ranking?.rank_position ?? null,
-      scoreLabel: ranking ? formatTokenAmount(ranking.score) : null,
+      rankPosition: row.rank_position,
+      scoreLabel:
+        row.total_tokens === null ? null : formatTokenAmount(row.total_tokens),
       serviceName: "Token Plane",
       badges: shareBadges,
     };

@@ -11,21 +11,21 @@ import { getSiteUrl } from "@/lib/env";
 const BIN_PATH = "~/.mylocalagenttoken/bin/token-agent";
 
 function buildInstallPrompt(siteUrl: string) {
-  return `Token Plane 로컬 토큰 사용량 추적기를 이 컴퓨터에 설치해줘. 아래 단계를 순서대로 실행해.
+  return `Install the Token Plane local token usage tracker on this machine. Follow these steps in order.
 
-1. 설치 스크립트 실행:
+1. Run the install script:
    curl -fsSL ${siteUrl}/install.sh | bash
-   이 스크립트는 ~/.mylocalagenttoken 아래에 token-agent 바이너리와 훅 스크립트를 설치하고, Claude Code(~/.claude/settings.json)와 Codex(~/.codex/config.toml)에 Stop 훅을 등록해. 기존 설정은 병합 방식으로 보존되고, 이미 설치돼 있으면 중복 등록 없이 넘어가.
+   This installs the token-agent binary and hook script under ~/.mylocalagenttoken, and registers a Stop hook for Claude Code (~/.claude/settings.json) and Codex (~/.codex/config.toml). Existing settings are preserved via merge, and re-running is idempotent.
 
-2. 로그인 실행 (명령 타임아웃을 6분 이상으로 설정):
+2. Log in (run with a command timeout of at least 6 minutes):
    ${BIN_PATH} login
-   이 명령은 브라우저를 자동으로 열고 로그인 완료까지 기다려. 명령을 시작하면 나에게 "브라우저에서 Google 로그인을 완료해주세요"라고 안내해줘. 브라우저가 열리지 않으면 명령이 출력한 URL을 나에게 보여줘.
+   This command opens a browser automatically and blocks until login completes. When you start it, tell me to complete the Google login in the browser. If the browser does not open, show me the URL the command printed.
 
-3. 설치 검증:
+3. Verify the install:
    ${BIN_PATH} inspect --quiet && ${BIN_PATH} sync --quiet
-   둘 다 성공하면 "설치 완료"와 함께 로그인 결과로 출력된 디바이스 정보를 간단히 요약해줘.
+   If both succeed, report "install complete" with a short summary of the device info printed by the login step.
 
-주의: ~/.mylocalagenttoken/auth.json의 내용, 액세스 토큰, 그 외 어떤 시크릿 값도 출력하거나 다른 곳에 저장하지 마.`;
+Important: never print or store the contents of ~/.mylocalagenttoken/auth.json, access tokens, or any other secret values.`;
 }
 
 const steps = [

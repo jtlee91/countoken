@@ -48,7 +48,7 @@ export function UsageCompositionCell({
         </span>
       </div>
       <div
-        className="mt-[2px] py-[5px]"
+        className="-mb-[5px] mt-[2px] py-[5px]"
         onMouseMove={handleMove}
         onMouseLeave={handleLeave}
       >

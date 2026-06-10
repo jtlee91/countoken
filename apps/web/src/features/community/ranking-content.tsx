@@ -278,14 +278,6 @@ export function RankingContent({
             </div>
           </div>
 
-          <div className="rounded-lg border border-dashed border-border bg-surface/60 p-4 text-sm font-bold leading-6 text-muted">
-            <p className="text-foreground">동료를 초대해보세요</p>
-            <p className="mt-1 text-xs font-bold leading-5">
-              참가자 30명이 넘으면 확정 주간 랭킹 Top 10에게{" "}
-              <strong className="text-foreground">포디움 배지</strong>가
-              지급됩니다.
-            </p>
-          </div>
         </aside>
       ) : null}
     </div>

@@ -292,19 +292,9 @@ export function SettingsContent({
                         </p>
                       )}
                       <p className="mt-1 truncate text-xs font-bold text-muted">
-                        {revoked ? (
-                          "연결 해제됨"
-                        ) : (
-                          <>
-                            {formatLastSeen(device.lastSeenAt) ===
-                            "오늘 연결" ? (
-                              <span className="font-extrabold text-token-green">
-                                ● 활성 ·{" "}
-                              </span>
-                            ) : null}
-                            {formatLastSeen(device.lastSeenAt)}
-                          </>
-                        )}
+                        {revoked
+                          ? "연결 해제됨"
+                          : formatLastSeen(device.lastSeenAt)}
                       </p>
                     </div>
                     <button

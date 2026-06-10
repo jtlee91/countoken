@@ -129,9 +129,13 @@ func (store *Store) EnsureLocalDevice(ctx context.Context) (LocalDevice, error) 
 		return device, nil
 	}
 
-	deviceID, err := newUUIDV4()
-	if err != nil {
-		return LocalDevice{}, err
+	deviceID := machineDerivedDeviceID()
+	if deviceID == "" {
+		randomID, err := newUUIDV4()
+		if err != nil {
+			return LocalDevice{}, err
+		}
+		deviceID = randomID
 	}
 	now := time.Now().In(kst).Format(time.RFC3339Nano)
 	device = LocalDevice{

@@ -66,7 +66,7 @@ export function InstallContent() {
         <h1 className="mt-2 text-3xl font-bold">
           프롬프트 한 번이면 설치 끝.
         </h1>
-        <p className="mt-3 max-w-2xl text-sm font-bold leading-6 text-muted">
+        <p className="mt-3 max-w-4xl text-sm font-bold leading-6 text-muted">
           코드 에이전트에게 설치를 맡기세요. 복사한 프롬프트를 붙여넣으면
           에이전트가 설치하고, Google 로그인 한 번으로 연결이 완료됩니다.
         </p>

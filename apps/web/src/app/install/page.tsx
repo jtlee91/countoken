@@ -7,7 +7,7 @@ export default async function InstallPage() {
 
   return (
     <SiteShell activePath="/install" viewer={viewer}>
-      <InstallContent viewer={viewer} />
+      <InstallContent />
     </SiteShell>
   );
 }

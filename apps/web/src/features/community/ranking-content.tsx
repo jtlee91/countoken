@@ -131,6 +131,32 @@ export function RankingContent({
       ? "랭킹은 아직 집계 전이며, 개인 주간 사용량만 표시됩니다."
       : "실제 사용량 집계 후 개인 랭킹 정보가 표시됩니다.");
 
+  // 바로 윗 순위와의 토큰 차이 (1위이거나 데이터가 없으면 표시하지 않음)
+  const viewerRank = viewerRanking?.rankPosition ?? null;
+  const viewerEntry =
+    viewerRank !== null
+      ? (entries.find((entry) => entry.rank === viewerRank) ?? null)
+      : null;
+  const nextEntry =
+    viewerRank !== null && viewerRank > 1
+      ? (entries.find((entry) => entry.rank === viewerRank - 1) ?? null)
+      : null;
+  const nextRankGapLabel =
+    viewerEntry && nextEntry
+      ? {
+          title: `${nextEntry.rank}위까지`,
+          value: `${formatTokenAmount(
+            Math.max(
+              0,
+              nextEntry.claudeTokens +
+                nextEntry.codexTokens -
+                viewerEntry.claudeTokens -
+                viewerEntry.codexTokens,
+            ),
+          )} 남음`,
+        }
+      : null;
+
   return (
     <div
       className={
@@ -200,74 +226,65 @@ export function RankingContent({
       </article>
 
       {viewer ? (
-        <aside className="rounded-lg border border-border bg-surface p-5">
-          <div className="grid gap-5">
-            <div>
-              <div className="grid grid-cols-[54px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-background p-3">
-                {viewerRanking?.rankPosition ? (
-                  <RankMark rank={viewerRanking.rankPosition} />
-                ) : (
-                  <span className="grid size-[54px] place-items-center rounded-xl bg-badge-gold/15 font-mono text-lg font-black text-[#9a6400]">
-                    -
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-black">
-                    {viewer.displayName}
-                  </p>
-                  <p className="mt-1 truncate text-xs font-bold text-muted">
-                    {viewerStatusLabel}
-                  </p>
-                </div>
-                <p className="border-l border-border pl-4 font-mono text-xl font-black">
+        <aside className="grid content-start gap-4">
+          <div className="rounded-lg border border-border bg-surface p-5">
+            <p className="text-xs font-extrabold text-muted">내 순위</p>
+            {viewerRanking?.rankPosition ? (
+              <p className="mt-1 font-mono text-4xl font-black">
+                #{viewerRanking.rankPosition}
+              </p>
+            ) : (
+              <p className="mt-2 text-sm font-bold text-muted">
+                {viewerStatusLabel}
+              </p>
+            )}
+
+            <dl className="mt-4">
+              <div className="flex items-center justify-between border-t border-border py-2.5">
+                <dt className="text-sm font-bold text-muted">주간 토큰</dt>
+                <dd className="font-mono text-sm font-black">
                   {viewerScoreLabel}
-                </p>
+                </dd>
               </div>
-              <p className="mt-3 text-sm font-bold text-muted">
+              {nextRankGapLabel ? (
+                <div className="flex items-center justify-between border-t border-border py-2.5">
+                  <dt className="text-sm font-bold text-muted">
+                    {nextRankGapLabel.title}
+                  </dt>
+                  <dd className="font-mono text-sm font-black">
+                    {nextRankGapLabel.value}
+                  </dd>
+                </div>
+              ) : null}
+              <div className="flex items-center justify-between border-t border-border py-2.5">
+                <dt className="text-sm font-bold text-muted">보유 배지</dt>
+                <dd className="text-sm font-black">
+                  {viewerBadges.length}개
+                </dd>
+              </div>
+            </dl>
+            {!viewerRanking?.rankPosition ? (
+              <p className="mt-2 text-xs font-bold leading-5 text-muted">
                 {viewerHelperLabel}
               </p>
-            </div>
+            ) : null}
 
-            <div className="border-t border-border pt-5">
-              <p className="text-sm font-black">보유 배지</p>
-              {viewerBadges.length > 0 ? (
-                <div
-                  className="mt-3 flex flex-wrap gap-3"
-                  aria-label="보유 배지"
-                >
-                  {viewerBadges.slice(0, 4).map((badge) => (
-                    <div
-                      key={badge.key}
-                      className="grid w-[76px] justify-items-center gap-1"
-                    >
-                      <Image
-                        src={badge.iconPath}
-                        alt={badge.name}
-                        width={52}
-                        height={52}
-                        className="size-[52px] rounded-full object-cover shadow-[0_8px_18px_rgba(29,45,37,0.12)]"
-                      />
-                      <strong className="max-w-full text-center text-xs font-black leading-tight">
-                        {badge.name}
-                      </strong>
-                      <span className="text-center text-[11px] font-extrabold text-muted">
-                        {badge.earnedAt?.slice(5)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+            <div className="mt-4">
+              {sharePath ? (
+                <CopyLinkButton url={sharePath} />
               ) : (
-                <p className="mt-3 rounded-md border border-dashed border-border bg-background px-3 py-2 text-sm font-bold text-muted">
-                  아직 획득한 배지가 없습니다.
-                </p>
+                <CreateShareLinkButton />
               )}
             </div>
+          </div>
 
-            {sharePath ? (
-              <CopyLinkButton url={sharePath} />
-            ) : (
-              <CreateShareLinkButton />
-            )}
+          <div className="rounded-lg border border-dashed border-border bg-surface/60 p-4 text-sm font-bold leading-6 text-muted">
+            <p className="text-foreground">동료를 초대해보세요</p>
+            <p className="mt-1 text-xs font-bold leading-5">
+              참가자 30명이 넘으면 확정 주간 랭킹 Top 10에게{" "}
+              <strong className="text-foreground">포디움 배지</strong>가
+              지급됩니다.
+            </p>
           </div>
         </aside>
       ) : null}

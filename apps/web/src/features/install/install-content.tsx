@@ -1,9 +1,4 @@
-import {
-  ClipboardPaste,
-  Globe,
-  ShieldCheck,
-  TerminalSquare,
-} from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 
 import { CopyPromptButton } from "@/features/install/copy-prompt-button";
 import { ExpandablePrompt } from "@/features/install/expandable-prompt";
@@ -31,22 +26,19 @@ Important: never print or store the contents of ~/.mylocalagenttoken/auth.json, 
 
 const steps = [
   {
-    icon: ClipboardPaste,
-    title: "1. 프롬프트 복사 & 붙여넣기",
+    title: "프롬프트 복사 & 붙여넣기",
     description:
-      "아래 설치 프롬프트를 복사해서 Claude Code 또는 Codex에 붙여넣으세요. 에이전트가 다운로드부터 훅 등록까지 전부 처리합니다.",
+      "아래 설치 프롬프트를 복사해서 Claude Code 또는 Codex에 붙여넣으세요. 어느 쪽에 붙여넣어도 두 에이전트 모두 설정됩니다.",
   },
   {
-    icon: Globe,
-    title: "2. Google 로그인",
+    title: "Google 로그인",
     description:
       "설치 중 브라우저가 자동으로 열립니다. Google 계정으로 로그인하면 이 기기가 내 계정에 연결됩니다.",
   },
   {
-    icon: TerminalSquare,
-    title: "3. 끝. 자동 동기화",
+    title: "끝. 이후는 자동 동기화",
     description:
-      "이후 에이전트 응답이 끝날 때마다 토큰 사용량이 자동으로 수집·동기화됩니다. 대시보드에서 바로 확인하세요.",
+      "에이전트 응답이 끝날 때마다 토큰 사용량이 자동으로 수집·동기화됩니다. 대시보드에서 바로 확인하세요.",
   },
 ];
 
@@ -70,32 +62,43 @@ export function InstallContent() {
           코드 에이전트에게 설치를 맡기세요. 복사한 프롬프트를 붙여넣으면
           에이전트가 설치하고, Google 로그인 한 번으로 연결이 완료됩니다.
         </p>
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {steps.map((step) => (
-            <div
+        <ol className="mt-7 grid gap-0">
+          {steps.map((step, index) => (
+            <li
               key={step.title}
-              className="rounded-md border border-border bg-background p-4"
+              className="relative grid grid-cols-[44px_minmax(0,1fr)] gap-4 pb-6 last:pb-0"
             >
-              <step.icon className="h-5 w-5 text-token-green" />
-              <p className="mt-3 text-sm font-black">{step.title}</p>
-              <p className="mt-2 text-xs font-bold leading-5 text-muted">
-                {step.description}
-              </p>
-            </div>
+              {index < steps.length - 1 ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute bottom-0 left-4 top-9 w-0.5 bg-token-green/20"
+                />
+              ) : null}
+              <span className="z-10 grid size-8 place-items-center rounded-full bg-token-green text-sm font-black text-white">
+                {index + 1}
+              </span>
+              <div>
+                <p className="pt-1 text-sm font-black">{step.title}</p>
+                <p className="mt-1.5 max-w-2xl text-xs font-bold leading-5 text-muted">
+                  {step.description}
+                </p>
+              </div>
+            </li>
           ))}
-        </div>
+        </ol>
       </section>
 
-      <section className="rounded-lg border border-border bg-surface p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-xl font-black">설치 프롬프트</h2>
-            <p className="mt-1 text-sm font-bold text-muted">
-              Claude Code와 Codex 어느 쪽에 붙여넣어도 두 에이전트 모두
-              설정됩니다.
-            </p>
+      <section className="overflow-hidden rounded-lg border border-[#2a2f2b]">
+        <div className="flex items-center gap-1.5 bg-[#202420] px-4 py-2.5">
+          <span className="size-3 rounded-full bg-[#ff5f57]" />
+          <span className="size-3 rounded-full bg-[#febc2e]" />
+          <span className="size-3 rounded-full bg-[#28c840]" />
+          <span className="ml-2.5 text-xs font-bold text-[#9aa39c]">
+            install-prompt.txt
+          </span>
+          <div className="ml-auto">
+            <CopyPromptButton text={prompt} />
           </div>
-          <CopyPromptButton text={prompt} />
         </div>
         <ExpandablePrompt text={prompt} />
       </section>

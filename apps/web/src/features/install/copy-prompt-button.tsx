@@ -16,7 +16,7 @@ export function CopyPromptButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className="inline-flex items-center gap-2 rounded-md border border-border bg-foreground px-4 py-2 text-sm font-extrabold text-white transition hover:opacity-90"
+      className="inline-flex items-center gap-1.5 rounded-md bg-token-green px-3.5 py-1.5 text-xs font-extrabold text-white transition hover:opacity-90"
     >
       {copied ? (
         <>

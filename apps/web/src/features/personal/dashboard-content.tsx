@@ -23,7 +23,8 @@ function formatDateTime(value: string | null) {
     minute: "2-digit",
   })
     .format(new Date(value))
-    .replace(/\s/g, "");
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function formatSessionTime(startedAt: string, endedAt: string) {
@@ -221,7 +222,7 @@ export function DashboardContent({
             <p>
               <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-token-green" />
               마지막 sync{" "}
-              <span className="font-mono font-black">
+              <span className="font-mono font-black tracking-wide">
                 {formatDateTime(dashboard.lastUploadAt)}
               </span>
             </p>

@@ -4,6 +4,8 @@ import {
   formatTokenSharePercent,
   tokenSharePercent,
 } from "@/lib/format/tokens";
+import { AgentUsageBar } from "./agent-usage-bar";
+import { DailyFlowChart } from "./daily-flow-chart";
 import { UsageCompositionCell } from "./usage-composition-cell";
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
@@ -64,64 +66,6 @@ function SessionTimeCell({
         </div>
       </div>
     </div>
-  );
-}
-
-const AREA_WIDTH = 700;
-const AREA_HEIGHT = 150;
-const AREA_TOP = 12;
-const AREA_BOTTOM = 148;
-
-function buildAreaGeometry(values: number[]) {
-  const max = Math.max(...values, 1);
-  const step = AREA_WIDTH / Math.max(values.length - 1, 1);
-  const points = values.map((value, index) => ({
-    x: Math.round(index * step),
-    y: Math.round(
-      AREA_BOTTOM - (value / max) * (AREA_BOTTOM - AREA_TOP),
-    ),
-  }));
-
-  let line = `M${points[0].x},${points[0].y}`;
-  for (let i = 1; i < points.length; i += 1) {
-    const prev = points[i - 1];
-    const curr = points[i];
-    const midX = Math.round((prev.x + curr.x) / 2);
-    line += ` C${midX},${prev.y} ${midX},${curr.y} ${curr.x},${curr.y}`;
-  }
-
-  const area = `${line} L${AREA_WIDTH},${AREA_HEIGHT} L0,${AREA_HEIGHT} Z`;
-  const last = points[points.length - 1];
-
-  return { line, area, last };
-}
-
-function DailyFlowChart({ values }: { values: number[] }) {
-  const { line, area, last } = buildAreaGeometry(values);
-
-  return (
-    <svg
-      viewBox={`0 0 ${AREA_WIDTH} ${AREA_HEIGHT}`}
-      preserveAspectRatio="none"
-      className="block h-[150px] w-full"
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id="daily-flow-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="var(--token-green)" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="var(--token-green)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill="url(#daily-flow-fill)" />
-      <path
-        d={line}
-        fill="none"
-        stroke="var(--token-green)"
-        strokeWidth="2.5"
-      />
-      <circle cx={last.x} cy={last.y} r="9" fill="var(--token-green)" opacity="0.2" />
-      <circle cx={last.x} cy={last.y} r="5" fill="var(--token-green)" />
-    </svg>
   );
 }
 
@@ -306,38 +250,7 @@ export function DashboardContent({
         </div>
 
         {hasDailyUsage ? (
-          <>
-            <div className="px-6 pb-1.5">
-              <DailyFlowChart
-                values={dashboard.dailyUsage.map((day) => day.totalTokens)}
-              />
-            </div>
-            <div
-              className="grid px-6 pb-5 text-center"
-              style={{
-                gridTemplateColumns: `repeat(${dashboard.dailyUsage.length}, minmax(0, 1fr))`,
-              }}
-            >
-              {dashboard.dailyUsage.map((day, index) => {
-                const isToday = index === dashboard.dailyUsage.length - 1;
-
-                return (
-                  <div key={day.date}>
-                    <p
-                      className={`text-[11px] font-black ${
-                        isToday ? "text-token-green" : ""
-                      }`}
-                    >
-                      {day.label}
-                    </p>
-                    <p className="mt-0.5 truncate font-mono text-[10px] font-extrabold text-muted">
-                      {formatTokenAmount(day.totalTokens)}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </>
+          <DailyFlowChart days={dashboard.dailyUsage} />
         ) : (
           <p className="mx-6 mb-6 rounded-md border border-dashed border-border bg-background p-4 text-sm font-bold leading-6 text-muted">
             아직 usage_daily 데이터가 없습니다.
@@ -381,12 +294,13 @@ export function DashboardContent({
                         {formatTokenAmount(agent.totalTokens)}
                       </p>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-surface-alt">
-                      <div
-                        className="h-full rounded-full bg-token-green"
-                        style={{ width: `${Math.max(share, 1)}%` }}
-                      />
-                    </div>
+                    <AgentUsageBar
+                      inputTokens={agent.inputTokens}
+                      cacheTokens={agent.cacheTokens}
+                      outputTokens={agent.outputTokens}
+                      totalTokens={agent.totalTokens}
+                      sharePercent={share}
+                    />
                     <div className="flex items-center justify-between text-[11px] font-bold text-muted">
                       <span>
                         {numberFormatter.format(agent.sessions)} sessions ·{" "}

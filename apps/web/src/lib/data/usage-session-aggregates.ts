@@ -175,6 +175,9 @@ function makeDailyUsage(now: Date) {
       date: dateKey,
       label: koreaDateLabel(dateKey),
       totalTokens: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheTokens: 0,
       sessions: 0,
     });
   }
@@ -205,6 +208,9 @@ export function summarizeUsageDailyRows(
     }
 
     daily.totalTokens += rowTotalTokens(row);
+    daily.inputTokens += row.input_tokens;
+    daily.outputTokens += row.output_tokens;
+    daily.cacheTokens += row.cache_tokens;
     daily.sessions += row.session_count;
   }
 
@@ -287,6 +293,9 @@ export function summarizeUsageDailyDashboard(
     const daily = dailyUsageByDate.get(usageDate);
     if (daily) {
       daily.totalTokens += rowTotal;
+      daily.inputTokens += row.input_tokens;
+      daily.outputTokens += row.output_tokens;
+      daily.cacheTokens += row.cache_tokens;
       daily.sessions += row.session_count;
     }
 
@@ -295,6 +304,9 @@ export function summarizeUsageDailyDashboard(
       agentType: row.provider,
       agentLabel: providerLabel(row.provider),
       totalTokens: (existing?.totalTokens ?? 0) + rowTotal,
+      inputTokens: (existing?.inputTokens ?? 0) + row.input_tokens,
+      outputTokens: (existing?.outputTokens ?? 0) + row.output_tokens,
+      cacheTokens: (existing?.cacheTokens ?? 0) + row.cache_tokens,
       activeTurns: 0,
       sessions: (existing?.sessions ?? 0) + row.session_count,
       llmCalls: (existing?.llmCalls ?? 0) + row.llm_call_count,
@@ -402,6 +414,9 @@ export function summarizeUsageSessions(
     const daily = dailyUsageByDate.get(dateKey);
     if (daily) {
       daily.totalTokens += rowTotal;
+      daily.inputTokens += row.input_tokens;
+      daily.outputTokens += row.output_tokens;
+      daily.cacheTokens += row.cache_tokens;
       daily.sessions += 1;
     }
 
@@ -410,6 +425,9 @@ export function summarizeUsageSessions(
       agentType: row.provider,
       agentLabel: providerLabel(row.provider),
       totalTokens: (existing?.totalTokens ?? 0) + rowTotal,
+      inputTokens: (existing?.inputTokens ?? 0) + row.input_tokens,
+      outputTokens: (existing?.outputTokens ?? 0) + row.output_tokens,
+      cacheTokens: (existing?.cacheTokens ?? 0) + row.cache_tokens,
       activeTurns: (existing?.activeTurns ?? 0) + row.user_turn_count,
       sessions: (existing?.sessions ?? 0) + 1,
       llmCalls: (existing?.llmCalls ?? 0) + row.llm_call_count,

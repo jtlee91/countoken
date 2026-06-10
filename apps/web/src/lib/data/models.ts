@@ -45,6 +45,9 @@ export type DashboardAgentUsage = {
   agentType: string;
   agentLabel: string;
   totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheTokens: number;
   activeTurns: number;
   sessions: number;
   llmCalls: number;
@@ -69,6 +72,9 @@ export type DashboardDailyUsage = {
   date: string;
   label: string;
   totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheTokens: number;
   sessions: number;
 };
 

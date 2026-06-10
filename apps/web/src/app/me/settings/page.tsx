@@ -7,7 +7,7 @@ import type { DashboardDevice } from "@/lib/data/models";
 import { createClient } from "@/lib/supabase/server";
 
 type DeviceRow = {
-  id: string;
+  device_id: string;
   device_label: string;
   last_seen_at: string | null;
   revoked: boolean;
@@ -16,17 +16,17 @@ type DeviceRow = {
 async function getSettingsDevices(userId: string): Promise<DashboardDevice[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from("devices")
-    .select("id, device_label, last_seen_at, revoked")
+    .from("usage_devices")
+    .select("device_id, device_label, last_seen_at, revoked")
     .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+    .order("last_seen_at", { ascending: false });
 
   if (error || !data) {
     return [];
   }
 
   return (data as DeviceRow[]).map((device) => ({
-    id: device.id,
+    id: device.device_id,
     label: device.device_label,
     status: device.revoked
       ? "revoked"

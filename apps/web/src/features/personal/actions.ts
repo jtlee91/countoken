@@ -131,12 +131,12 @@ export async function revokeDeviceAction(
   }
 
   const { data: device, error: deviceError } = await supabase
-    .from("devices")
+    .from("usage_devices")
     .update({ revoked: true })
-    .eq("id", deviceId)
+    .eq("device_id", deviceId)
     .eq("user_id", userId)
-    .select("id")
-    .maybeSingle<{ id: string }>();
+    .select("device_id")
+    .maybeSingle<{ device_id: string }>();
 
   if (deviceError || !device) {
     return {
@@ -145,21 +145,6 @@ export async function revokeDeviceAction(
       safeMessage: "Device could not be revoked.",
     };
   }
-
-  await Promise.all([
-    supabase
-      .from("agent_installations")
-      .update({ status: "revoked" })
-      .eq("device_id", deviceId)
-      .eq("user_id", userId),
-    supabase.from("install_audits").insert({
-      user_id: userId,
-      device_id: deviceId,
-      agent_type: "codex",
-      step: "device_revoke",
-      result: "success",
-    }),
-  ]);
 
   revalidatePath("/me/settings");
   revalidatePath("/me/dashboard");

@@ -178,6 +178,22 @@ Deno.serve(async (req: Request) => {
   }
 
   const userID = userData.user.id;
+
+  const { data: existingDevice, error: deviceLookupError } = await supabase
+    .from("usage_devices")
+    .select("revoked")
+    .eq("user_id", userID)
+    .eq("device_id", payload.device.device_id)
+    .maybeSingle();
+
+  if (deviceLookupError) {
+    return jsonResponse({ error: "database_error", detail: deviceLookupError.message }, 500);
+  }
+
+  if (existingDevice?.revoked) {
+    return jsonResponse({ error: "device_revoked" }, 403);
+  }
+
   const syncedAt = new Date().toISOString();
   const { error: deviceError } = await supabase
     .from("usage_devices")

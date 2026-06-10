@@ -27,11 +27,33 @@ type BadgeRow = {
   icon_path: string;
 };
 
-type RankingSnapshotRow = {
-  user_id: string;
+type WeeklyRankingRow = {
   rank_position: number;
-  score: number;
+  display_name: string;
+  avatar_style: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_tokens: number;
+  total_tokens: number;
+  is_viewer: boolean | null;
 };
+
+function kstTodayDateString() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+async function getWeeklyRankingRows() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_weekly_ranking", {
+    week_start: kstTodayDateString(),
+  });
+
+  if (error || !data) {
+    return [];
+  }
+
+  return data as WeeklyRankingRow[];
+}
 
 type ProfileRow = {
   user_id: string;
@@ -56,24 +78,6 @@ type UsageDeviceRow = {
   device_id: string;
   device_label: string;
 };
-
-function toViewerRankingSummary(
-  snapshot?: RankingSnapshotRow | null,
-): ViewerRankingSummary | null {
-  if (!snapshot) {
-    return null;
-  }
-
-  return {
-    rankPosition: snapshot.rank_position,
-    rankMovement: "Global weekly",
-    scoreLabel: formatTokenAmount(snapshot.score),
-    topTenGapLabel:
-      snapshot.rank_position <= 10
-        ? "이번 주 Top 10 안에 있습니다."
-        : "Top 10 진입까지 집계 대기 중입니다.",
-  };
-}
 
 function formatEarnedAt(value: string | null) {
   if (!value) {
@@ -269,17 +273,10 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
         .eq("user_id", viewer.userId)
         .order("ended_at", { ascending: false })
         .limit(5),
-      supabase
-        .from("ranking_snapshots")
-        .select("rank_position, score")
-        .eq("user_id", viewer.userId)
-        .eq("period", "weekly")
-        .eq("rank_scope", "global")
-        .order("calculated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle<{ rank_position: number; score: number }>(),
+      getWeeklyRankingRows(),
     ]);
 
+    const viewerRankingRow = rankingResult.find((row) => row.is_viewer) ?? null;
     const dailyRows = (dailyResult.data ?? []) as unknown as UsageDailyAggregateRow[];
     const sessionRows = (sessionsResult.data ??
       []) as unknown as UsageSessionAggregateRow[];
@@ -320,8 +317,8 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
 
     return {
       ...dashboard,
-      weeklyRank: rankingResult.data?.rank_position ?? null,
-      weeklyRankScore: rankingResult.data?.score ?? null,
+      weeklyRank: viewerRankingRow?.rank_position ?? null,
+      weeklyRankScore: viewerRankingRow?.total_tokens ?? null,
     };
   },
 
@@ -337,81 +334,38 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
     }
 
     const supabase = await createClient();
-    const [rankingResult, viewerWeeklyUsage] = await Promise.all([
-      supabase
-        .from("ranking_snapshots")
-        .select("user_id, rank_position, score")
-        .eq("period", "weekly")
-        .eq("rank_scope", "global")
-        .order("rank_position", { ascending: true })
-        .limit(10),
+    const [rankingRows, viewerWeeklyUsage] = await Promise.all([
+      getWeeklyRankingRows(),
       getViewerWeeklyUsage(viewer?.userId),
     ]);
 
-    const snapshots =
-      rankingResult.error || !rankingResult.data
-        ? []
-        : (rankingResult.data as RankingSnapshotRow[]);
-    const userIds = snapshots.map((snapshot) => snapshot.user_id);
-    const [profiles, userBadges] = await Promise.all([
-      getProfilesByUserId(userIds),
-      getUserBadgeRows(userIds),
-    ]);
-    const badgeIds = [...new Set(userBadges.map((badge) => badge.badge_id))];
-    const badges = await getBadgeRowsById(badgeIds);
-
-    const entries: RankingEntry[] = snapshots.flatMap((snapshot) => {
-      const profile = profiles.get(snapshot.user_id);
-
-      if (!profile) {
-        return [];
-      }
-
-      const firstBadgeGrant = userBadges.find(
-        (badge) => badge.user_id === snapshot.user_id,
-      );
-      const badge = firstBadgeGrant
-        ? badges.get(firstBadgeGrant.badge_id)
-        : undefined;
-
-      return {
-        rank: snapshot.rank_position,
-        displayName: profile.display_name,
-        badgeName: badge?.name ?? "미획득",
+    const entries: RankingEntry[] = rankingRows
+      .filter((row) => row.rank_position <= 10)
+      .map((row) => ({
+        rank: row.rank_position,
+        displayName: row.display_name,
+        badgeName: "미획득",
         movement: "Global weekly",
-        scoreLabel: formatTokenAmount(snapshot.score),
-      };
-    });
+        scoreLabel: formatTokenAmount(row.total_tokens),
+      }));
 
-    const viewerBadges =
-      viewer?.userId && userIds.includes(viewer.userId)
-        ? userBadges
-            .filter((grant) => grant.user_id === viewer.userId)
-            .map((grant) => {
-              const badge = badges.get(grant.badge_id);
-              return badge ? toBadgeDefinition(badge, grant) : null;
-            })
-            .filter((badge): badge is BadgeDefinition => Boolean(badge))
-        : [];
-    const viewerSnapshot =
-      viewer?.userId && userIds.includes(viewer.userId)
-        ? snapshots.find((snapshot) => snapshot.user_id === viewer.userId)
-        : viewer?.userId
-          ? (
-              await supabase
-                .from("ranking_snapshots")
-                .select("user_id, rank_position, score")
-                .eq("user_id", viewer.userId)
-                .eq("period", "weekly")
-                .eq("rank_scope", "global")
-                .order("calculated_at", { ascending: false })
-                .limit(1)
-                .maybeSingle<RankingSnapshotRow>()
-            ).data
-          : null;
+    const viewerRow = viewer?.userId
+      ? (rankingRows.find((row) => row.is_viewer) ?? null)
+      : null;
+    const viewerRanking: ViewerRankingSummary | null = viewerRow
+      ? {
+          rankPosition: viewerRow.rank_position,
+          rankMovement: "Global weekly",
+          scoreLabel: formatTokenAmount(viewerRow.total_tokens),
+          topTenGapLabel:
+            viewerRow.rank_position <= 10
+              ? "이번 주 Top 10 안에 있습니다."
+              : "Top 10 진입까지 집계 대기 중입니다.",
+        }
+      : null;
     const viewerShareSlug =
-      viewer?.userId && viewerSnapshot
-        ? (
+      viewer?.userId && viewerRow
+        ? ((
             await supabase
               .from("share_cards")
               .select("public_slug")
@@ -420,13 +374,13 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
               .order("created_at", { ascending: false })
               .limit(1)
               .maybeSingle<{ public_slug: string }>()
-          ).data?.public_slug ?? null
+          ).data?.public_slug ?? null)
         : null;
 
     return {
       entries,
-      viewerBadges,
-      viewerRanking: toViewerRankingSummary(viewerSnapshot),
+      viewerBadges: [],
+      viewerRanking,
       viewerWeeklyUsage,
       viewerShareSlug,
     };

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-import { ViewerAvatar } from "@/components/viewer-avatar";
 import type { ViewerProfile } from "@/lib/data/models";
 
 const tabs = [
@@ -12,25 +11,16 @@ const tabs = [
 
 export function MyPageShell({
   activeTab,
-  viewer,
   children,
 }: {
   activeTab: (typeof tabs)[number]["key"];
-  viewer: ViewerProfile;
+  viewer?: ViewerProfile;
   children: ReactNode;
 }) {
   return (
     <div className="grid gap-5 lg:grid-cols-[230px_minmax(0,1fr)]">
       <aside className="self-start rounded-lg border border-border bg-surface p-4 lg:sticky lg:top-24">
-        <div className="border-b border-border px-1 pb-4">
-          <div className="flex items-center gap-3">
-            <ViewerAvatar viewer={viewer} size={36} />
-            <strong className="block truncate text-sm font-black">
-              {viewer.displayName}
-            </strong>
-          </div>
-        </div>
-        <nav aria-label="My Page 탭" className="mt-4 grid gap-2 lg:grid-cols-1">
+        <nav aria-label="마이페이지 탭" className="grid gap-2 lg:grid-cols-1">
           {tabs.map((tab) => {
             const active = activeTab === tab.key;
 

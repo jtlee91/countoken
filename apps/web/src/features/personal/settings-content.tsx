@@ -130,7 +130,7 @@ export function SettingsContent({
         <p className="text-sm font-extrabold text-token-green">
           마이페이지 · 설정
         </p>
-        <h1 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
+        <h1 className="mt-2 text-xl font-black tracking-normal sm:text-[28px]">
           계정과 공개 범위
         </h1>
         <p className="mt-3 max-w-2xl text-base font-semibold leading-7 text-muted">

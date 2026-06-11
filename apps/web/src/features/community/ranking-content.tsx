@@ -2,6 +2,7 @@ import Image from "next/image";
 
 import { CopyLinkButton } from "@/components/copy-link-button";
 import { CreateShareLinkButton } from "@/features/community/create-share-link-button";
+import { ProviderShareBar } from "@/features/community/provider-share-bar";
 import {
   type BadgeDefinition,
   type RankingEntry,
@@ -32,52 +33,6 @@ function providerPillBackground(claudeTokens: number, codexTokens: number) {
         : Math.min(96, Math.max(4, Math.round(rawPct)));
 
   return `linear-gradient(90deg, ${CLAUDE_COLOR} 0 ${claudePct}%, ${CODEX_COLOR} ${claudePct}% 100%)`;
-}
-
-function ProviderShareBar({
-  claudeTokens,
-  codexTokens,
-}: {
-  claudeTokens: number;
-  codexTokens: number;
-}) {
-  const total = claudeTokens + codexTokens;
-  const claudePct = total > 0 ? Math.round((claudeTokens / total) * 100) : 0;
-  const codexPct = total > 0 ? 100 - claudePct : 0;
-
-  if (total <= 0) {
-    return <div className="mt-2.5 h-2 rounded-full bg-background sm:hidden" />;
-  }
-
-  return (
-    <div
-      className="group relative mt-2.5 h-2 rounded-full bg-background sm:hidden"
-      tabIndex={0}
-    >
-      <div
-        className="h-full overflow-hidden rounded-full"
-        style={{
-          background: providerPillBackground(claudeTokens, codexTokens),
-        }}
-      />
-      <span className="pointer-events-none absolute bottom-full left-0 z-10 mb-2 hidden whitespace-nowrap rounded-lg bg-foreground px-3.5 py-2.5 text-left font-sans text-xs font-bold leading-6 text-white shadow-[0_10px_26px_rgba(29,45,37,0.28)] group-hover:block group-focus-visible:block">
-        <span className="flex items-center gap-2">
-          <span
-            className="size-2 rounded-[3px]"
-            style={{ background: CLAUDE_COLOR }}
-          />
-          Claude Code {formatTokenAmount(claudeTokens)} · {claudePct}%
-        </span>
-        <span className="flex items-center gap-2">
-          <span
-            className="size-2 rounded-[3px]"
-            style={{ background: CODEX_COLOR }}
-          />
-          Codex {formatTokenAmount(codexTokens)} · {codexPct}%
-        </span>
-      </span>
-    </div>
-  );
 }
 
 // 데스크톱(sm 이상) 전용 점수 필 — 모바일에서는 ProviderShareBar로 대체된다

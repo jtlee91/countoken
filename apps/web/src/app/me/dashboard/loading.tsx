@@ -1,5 +1,5 @@
 import { RouteSkeleton } from "@/components/route-skeleton";
 
 export default function Loading() {
-  return <RouteSkeleton variant="dashboard" />;
+  return <RouteSkeleton variant="me-dashboard" />;
 }

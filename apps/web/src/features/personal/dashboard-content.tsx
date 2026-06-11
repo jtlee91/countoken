@@ -21,6 +21,8 @@ function formatDateTime(value: string | null) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    // 서버 로케일에 따라 오전/오후·AM/PM이 섞여 나오지 않도록 24시간제로 고정
+    hourCycle: "h23",
   })
     .format(new Date(value))
     .replace(/\s+/g, " ")

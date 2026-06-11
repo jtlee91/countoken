@@ -253,16 +253,16 @@ export function DashboardContent({
   const delta = todayDelta(dashboard.dailyUsage);
   const breakdownItems = [
     {
-      label: "Cache",
-      value: dashboard.tokenBreakdown.cache,
-      stroke: "var(--token-green)",
-      dotClass: "bg-token-green",
-    },
-    {
       label: "Input",
       value: dashboard.tokenBreakdown.input,
       stroke: "var(--code-blue)",
       dotClass: "bg-code-blue",
+    },
+    {
+      label: "Cache",
+      value: dashboard.tokenBreakdown.cache,
+      stroke: "var(--token-green)",
+      dotClass: "bg-token-green",
     },
     {
       label: "Output",

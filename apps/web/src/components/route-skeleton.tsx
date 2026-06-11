@@ -228,25 +228,28 @@ function MyPageFrame({ children }: { children: ReactNode }) {
   );
 }
 
-// 설정: 제목 + 본문 섹션 카드들
-function ArticleSkeleton() {
+// 설정: 히어로 카드 + (좌) 프로필 폼 / (우) 연결된 기기 2단 그리드
+function SettingsSkeleton() {
   return (
     <div className="space-y-5">
       <Card>
-        <SkeletonBlock className="h-9 w-56" />
-        <SkeletonBlock className="mt-4 h-4 w-3/4" />
-        <SkeletonBlock className="mt-2 h-4 w-2/3" />
+        <SkeletonBlock className="h-4 w-24" />
+        <SkeletonBlock className="mt-2 h-10 w-72 max-w-full" />
+        <SkeletonBlock className="mt-3 h-4 w-96 max-w-full" />
       </Card>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <SkeletonBlock className="h-6 w-36" />
-          <SkeletonBlock className="mt-4 h-12 w-full" />
-          <SkeletonBlock className="mt-3 h-12 w-full" />
+          <SkeletonBlock className="h-6 w-20" />
+          <SkeletonBlock className="mt-6 h-4 w-14" />
+          <SkeletonBlock className="mt-2 h-14 w-full" />
+          <SkeletonBlock className="mt-4 h-20 w-full" />
+          <SkeletonBlock className="mt-5 h-11 w-24" />
         </Card>
         <Card>
-          <SkeletonBlock className="h-6 w-36" />
-          <SkeletonBlock className="mt-4 h-12 w-full" />
-          <SkeletonBlock className="mt-3 h-12 w-full" />
+          <SkeletonBlock className="h-6 w-32" />
+          <SkeletonBlock className="mt-6 h-20 w-full" />
+          <SkeletonBlock className="mt-4 h-20 w-full" />
+          <SkeletonBlock className="mt-4 h-4 w-2/3" />
         </Card>
       </div>
     </div>
@@ -281,7 +284,7 @@ const variants = {
   install: InstallSkeleton,
   dashboard: DashboardSkeleton,
   badges: BadgesSkeleton,
-  article: ArticleSkeleton,
+  settings: SettingsSkeleton,
   share: ShareSkeleton,
   "me-dashboard": () => (
     <MyPageFrame>
@@ -295,13 +298,13 @@ const variants = {
   ),
   "me-settings": () => (
     <MyPageFrame>
-      <ArticleSkeleton />
+      <SettingsSkeleton />
     </MyPageFrame>
   ),
 } as const;
 
 export function RouteSkeleton({
-  variant = "article",
+  variant = "settings",
 }: {
   variant?: keyof typeof variants;
 }) {

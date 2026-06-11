@@ -21,6 +21,9 @@ function buildInstallPrompt(siteUrl: string) {
    ${BIN_PATH} inspect --quiet && ${BIN_PATH} sync --quiet
    If both succeed, report "install complete" with a short summary of the device info printed by the login step.
 
+4. Open the dashboard:
+   Open ${siteUrl}/ in the browser (e.g. \`open ${siteUrl}/\` on macOS or \`xdg-open ${siteUrl}/\` on Linux) so I can see my synced token usage right away.
+
 Important: never print or store the contents of ~/.mylocalagenttoken/auth.json, access tokens, or any other secret values.`;
 }
 

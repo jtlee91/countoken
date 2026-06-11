@@ -238,8 +238,8 @@ export function RankingContent({
                       <p
                         className={
                           featured
-                            ? "truncate text-lg font-black"
-                            : "truncate text-sm font-extrabold"
+                            ? "min-w-0 flex-1 truncate text-lg font-black"
+                            : "min-w-0 flex-1 truncate text-sm font-extrabold"
                         }
                       >
                         {entry.displayName}

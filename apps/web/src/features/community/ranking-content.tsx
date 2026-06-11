@@ -34,51 +34,52 @@ function providerPillBackground(claudeTokens: number, codexTokens: number) {
   return `linear-gradient(90deg, ${CLAUDE_COLOR} 0 ${claudePct}%, ${CODEX_COLOR} ${claudePct}% 100%)`;
 }
 
-function ProviderScorePill({
+function ProviderShareBar({
   claudeTokens,
   codexTokens,
-  scoreLabel,
-  featured,
+  maxTokens,
 }: {
   claudeTokens: number;
   codexTokens: number;
-  scoreLabel: string;
-  featured: boolean;
+  maxTokens: number;
 }) {
   const total = claudeTokens + codexTokens;
   const claudePct = total > 0 ? Math.round((claudeTokens / total) * 100) : 0;
   const codexPct = total > 0 ? 100 - claudePct : 0;
+  // 1위 대비 상대 길이 (너무 짧으면 안 보이므로 8% 하한)
+  const widthPct =
+    maxTokens > 0 ? Math.max(8, Math.round((total / maxTokens) * 100)) : 0;
+
+  if (total <= 0) {
+    return <div className="mt-2.5 h-2 rounded-full bg-background" />;
+  }
 
   return (
-    <span
-      className={
-        featured
-          ? "group relative col-start-2 inline-flex min-w-[128px] items-center justify-center justify-self-start rounded-full px-5 py-2 font-mono text-xl font-black text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)] sm:col-start-auto sm:justify-self-auto"
-          : "group relative col-start-2 inline-flex min-w-[108px] items-center justify-center justify-self-start rounded-full px-4 py-1.5 font-mono text-sm font-black text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)] sm:col-start-auto sm:justify-self-auto"
-      }
-      style={{ background: providerPillBackground(claudeTokens, codexTokens) }}
-      tabIndex={0}
-    >
-      {scoreLabel}
-      {total > 0 ? (
-        <span className="pointer-events-none absolute bottom-full right-0 z-10 mb-2 hidden whitespace-nowrap rounded-lg bg-foreground px-3.5 py-2.5 text-left font-sans text-xs font-bold leading-6 text-white shadow-[0_10px_26px_rgba(29,45,37,0.28)] [text-shadow:none] group-hover:block group-focus-visible:block">
-          <span className="flex items-center gap-2">
-            <span
-              className="size-2 rounded-[3px]"
-              style={{ background: CLAUDE_COLOR }}
-            />
-            Claude Code {formatTokenAmount(claudeTokens)} · {claudePct}%
-          </span>
-          <span className="flex items-center gap-2">
-            <span
-              className="size-2 rounded-[3px]"
-              style={{ background: CODEX_COLOR }}
-            />
-            Codex {formatTokenAmount(codexTokens)} · {codexPct}%
-          </span>
+    <div className="group relative mt-2.5 h-2 rounded-full bg-background" tabIndex={0}>
+      <div
+        className="h-full overflow-hidden rounded-full"
+        style={{
+          width: `${widthPct}%`,
+          background: providerPillBackground(claudeTokens, codexTokens),
+        }}
+      />
+      <span className="pointer-events-none absolute bottom-full left-0 z-10 mb-2 hidden whitespace-nowrap rounded-lg bg-foreground px-3.5 py-2.5 text-left font-sans text-xs font-bold leading-6 text-white shadow-[0_10px_26px_rgba(29,45,37,0.28)] group-hover:block group-focus-visible:block">
+        <span className="flex items-center gap-2">
+          <span
+            className="size-2 rounded-[3px]"
+            style={{ background: CLAUDE_COLOR }}
+          />
+          Claude Code {formatTokenAmount(claudeTokens)} · {claudePct}%
         </span>
-      ) : null}
-    </span>
+        <span className="flex items-center gap-2">
+          <span
+            className="size-2 rounded-[3px]"
+            style={{ background: CODEX_COLOR }}
+          />
+          Codex {formatTokenAmount(codexTokens)} · {codexPct}%
+        </span>
+      </span>
+    </div>
   );
 }
 
@@ -214,40 +215,70 @@ export function RankingContent({
 
         {entries.length > 0 ? (
           <div className="grid gap-3">
-            {entries.map((entry) => {
-              const featured = entry.rank === 1;
-
-              return (
-                <article
-                  key={entry.rank}
-                  className={
-                    featured
-                      ? "grid min-h-[94px] grid-cols-[64px_minmax(0,1fr)] items-center gap-3 rounded-lg border border-badge-gold/40 bg-gradient-to-r from-badge-gold/15 to-white p-4 shadow-[0_16px_34px_rgba(119,82,13,0.12)] sm:grid-cols-[64px_minmax(0,1fr)_auto]"
-                      : "grid grid-cols-[46px_minmax(0,1fr)] items-center gap-3 rounded-lg border border-border bg-background p-3 sm:grid-cols-[46px_minmax(0,1fr)_auto]"
-                  }
-                >
-                  <RankMark rank={entry.rank} />
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <EntryAvatar entry={entry} featured={featured} />
-                    <p
-                      className={
-                        featured
-                          ? "truncate text-lg font-black"
-                          : "truncate text-sm font-extrabold"
-                      }
-                    >
-                      {entry.displayName}
-                    </p>
-                  </div>
-                  <ProviderScorePill
-                    claudeTokens={entry.claudeTokens}
-                    codexTokens={entry.codexTokens}
-                    scoreLabel={entry.scoreLabel}
-                    featured={featured}
-                  />
-                </article>
+            {(() => {
+              const maxTokens = Math.max(
+                ...entries.map((entry) => entry.claudeTokens + entry.codexTokens),
               );
-            })}
+
+              return entries.map((entry) => {
+                const featured = entry.rank === 1;
+
+                return (
+                  <article
+                    key={entry.rank}
+                    className={
+                      featured
+                        ? "rounded-lg border border-badge-gold/40 bg-gradient-to-r from-badge-gold/15 to-white p-4 shadow-[0_16px_34px_rgba(119,82,13,0.12)]"
+                        : "rounded-lg border border-border bg-background p-3"
+                    }
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <RankMark rank={entry.rank} />
+                      <EntryAvatar entry={entry} featured={featured} />
+                      <p
+                        className={
+                          featured
+                            ? "truncate text-lg font-black"
+                            : "truncate text-sm font-extrabold"
+                        }
+                      >
+                        {entry.displayName}
+                      </p>
+                      <span
+                        className={
+                          featured
+                            ? "ml-auto shrink-0 font-mono text-xl font-black"
+                            : "ml-auto shrink-0 font-mono text-sm font-black"
+                        }
+                      >
+                        {entry.scoreLabel}
+                      </span>
+                    </div>
+                    <ProviderShareBar
+                      claudeTokens={entry.claudeTokens}
+                      codexTokens={entry.codexTokens}
+                      maxTokens={maxTokens}
+                    />
+                  </article>
+                );
+              });
+            })()}
+            <div className="flex gap-4 text-[11px] font-bold text-muted">
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="size-2 rounded-full"
+                  style={{ background: CLAUDE_COLOR }}
+                />
+                Claude
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="size-2 rounded-full"
+                  style={{ background: CODEX_COLOR }}
+                />
+                Codex
+              </span>
+            </div>
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-border bg-background p-6">

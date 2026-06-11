@@ -200,16 +200,16 @@ export function RankingContent({
       }
     >
       <article className="rounded-lg border border-border bg-surface p-5 shadow-[0_18px_45px_rgba(29,45,37,0.08)]">
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-          <div>
+        <div className="mb-5">
+          <div className="flex items-center justify-between gap-4">
             <p className="text-sm font-extrabold text-token-green">랭킹</p>
-            <h1 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
-              Global weekly
-            </h1>
+            <span className="inline-flex min-h-8 shrink-0 items-center rounded-full border border-badge-gold/30 bg-[#fff0c2] px-3 text-xs font-extrabold text-[#9a6400]">
+              이번 주 Top 10
+            </span>
           </div>
-          <span className="inline-flex min-h-8 items-center rounded-full border border-badge-gold/30 bg-[#fff0c2] px-3 text-xs font-extrabold text-[#9a6400]">
-            이번 주 Top 10
-          </span>
+          <h1 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
+            Global weekly
+          </h1>
         </div>
 
         {entries.length > 0 ? (

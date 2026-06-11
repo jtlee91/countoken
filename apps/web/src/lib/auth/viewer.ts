@@ -1,7 +1,5 @@
 import "server-only";
 
-import type { User } from "@supabase/supabase-js";
-
 import { trustedAvatarUrl } from "@/lib/avatar";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import type { ViewerProfile } from "@/lib/data/models";
@@ -15,6 +13,12 @@ type ProfileRow = {
   ranking_opt_in: boolean;
 };
 
+// JWT 클레임에서 화면 표시에 필요한 최소 정보만 사용한다 (인가 판단에는 쓰지 않는다)
+type ViewerClaims = {
+  sub: string;
+  user_metadata?: Record<string, unknown>;
+};
+
 export type ViewerContext = {
   viewer: ViewerProfile | null;
   authenticated: boolean;
@@ -25,41 +29,42 @@ function makeInitial(displayName: string) {
   return first ? first.toUpperCase() : "T";
 }
 
-function makeDefaultDisplayName(user: User) {
-  const metadataName = user.user_metadata?.full_name || user.user_metadata?.name;
+function makeDefaultDisplayName(claims: ViewerClaims) {
+  const metadataName =
+    claims.user_metadata?.full_name || claims.user_metadata?.name;
 
   if (typeof metadataName === "string" && metadataName.trim()) {
     return metadataName.trim().slice(0, 40);
   }
 
-  return `Pilot ${user.id.slice(0, 4)}`;
+  return `Pilot ${claims.sub.slice(0, 4)}`;
 }
 
-function makeAvatarUrl(user: User) {
+function makeAvatarUrl(claims: ViewerClaims) {
   // user_metadata는 사용자가 직접 수정할 수 있으므로 검증된 URL만 신뢰한다
-  return trustedAvatarUrl(
-    user.user_metadata?.avatar_url || user.user_metadata?.picture,
-  );
+  const candidate =
+    claims.user_metadata?.avatar_url || claims.user_metadata?.picture;
+  return trustedAvatarUrl(typeof candidate === "string" ? candidate : null);
 }
 
-function toViewer(profile: ProfileRow, user: User): ViewerProfile {
+function toViewer(profile: ProfileRow, claims: ViewerClaims): ViewerProfile {
   return {
-    userId: user.id,
+    userId: claims.sub,
     displayName: profile.display_name,
     initial: makeInitial(profile.display_name),
-    avatarUrl: makeAvatarUrl(user),
+    avatarUrl: makeAvatarUrl(claims),
     rankingOptIn: profile.ranking_opt_in,
     source: "supabase",
   };
 }
 
-async function getOrCreateProfile(user: User): Promise<ProfileRow | null> {
+async function getOrCreateProfile(claims: ViewerClaims): Promise<ProfileRow | null> {
   const supabase = await createClient();
-  const avatarUrl = makeAvatarUrl(user);
+  const avatarUrl = makeAvatarUrl(claims);
   const { data: existingProfile } = await supabase
     .from("profiles")
     .select("user_id, display_name, avatar_style, avatar_url, ranking_opt_in")
-    .eq("user_id", user.id)
+    .eq("user_id", claims.sub)
     .maybeSingle<ProfileRow>();
 
   if (existingProfile) {
@@ -68,17 +73,17 @@ async function getOrCreateProfile(user: User): Promise<ProfileRow | null> {
       await supabase
         .from("profiles")
         .update({ avatar_url: avatarUrl })
-        .eq("user_id", user.id);
+        .eq("user_id", claims.sub);
     }
 
     return { ...existingProfile, avatar_url: avatarUrl };
   }
 
-  const displayName = makeDefaultDisplayName(user);
+  const displayName = makeDefaultDisplayName(claims);
   const { data: insertedProfile, error } = await supabase
     .from("profiles")
     .insert({
-      user_id: user.id,
+      user_id: claims.sub,
       display_name: displayName,
       avatar_style: "gradient",
       avatar_url: avatarUrl,
@@ -89,7 +94,7 @@ async function getOrCreateProfile(user: User): Promise<ProfileRow | null> {
 
   if (error) {
     return {
-      user_id: user.id,
+      user_id: claims.sub,
       display_name: displayName,
       avatar_style: "gradient",
       avatar_url: avatarUrl,
@@ -107,21 +112,22 @@ export async function getAuthenticatedViewer(): Promise<ViewerProfile | null> {
 
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    // 화면 표시용 조회 경로이므로 Auth 서버 왕복 대신 JWT 로컬 검증을 사용한다.
+    // 쓰기 작업(actions, login route)은 계속 getUser()로 서버 검증한다.
+    const { data } = await supabase.auth.getClaims();
+    const claims = data?.claims as ViewerClaims | undefined;
 
-    if (!user) {
+    if (!claims?.sub) {
       return null;
     }
 
-    const profile = await getOrCreateProfile(user);
+    const profile = await getOrCreateProfile(claims);
 
     if (!profile) {
       return null;
     }
 
-    return toViewer(profile, user);
+    return toViewer(profile, claims);
   } catch {
     return null;
   }

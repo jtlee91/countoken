@@ -51,11 +51,14 @@ function ProviderShareBar({
     maxTokens > 0 ? Math.max(8, Math.round((total / maxTokens) * 100)) : 0;
 
   if (total <= 0) {
-    return <div className="mt-2.5 h-2 rounded-full bg-background" />;
+    return <div className="mt-2.5 h-2 rounded-full bg-background sm:hidden" />;
   }
 
   return (
-    <div className="group relative mt-2.5 h-2 rounded-full bg-background" tabIndex={0}>
+    <div
+      className="group relative mt-2.5 h-2 rounded-full bg-background sm:hidden"
+      tabIndex={0}
+    >
       <div
         className="h-full overflow-hidden rounded-full"
         style={{
@@ -80,6 +83,55 @@ function ProviderShareBar({
         </span>
       </span>
     </div>
+  );
+}
+
+// 데스크톱(sm 이상) 전용 점수 필 — 모바일에서는 ProviderShareBar로 대체된다
+function ProviderScorePill({
+  claudeTokens,
+  codexTokens,
+  scoreLabel,
+  featured,
+}: {
+  claudeTokens: number;
+  codexTokens: number;
+  scoreLabel: string;
+  featured: boolean;
+}) {
+  const total = claudeTokens + codexTokens;
+  const claudePct = total > 0 ? Math.round((claudeTokens / total) * 100) : 0;
+  const codexPct = total > 0 ? 100 - claudePct : 0;
+
+  return (
+    <span
+      className={
+        featured
+          ? "group relative ml-auto hidden min-w-[128px] shrink-0 items-center justify-center rounded-full px-5 py-2 font-mono text-xl font-black text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)] sm:inline-flex"
+          : "group relative ml-auto hidden min-w-[108px] shrink-0 items-center justify-center rounded-full px-4 py-1.5 font-mono text-sm font-black text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.35)] sm:inline-flex"
+      }
+      style={{ background: providerPillBackground(claudeTokens, codexTokens) }}
+      tabIndex={0}
+    >
+      {scoreLabel}
+      {total > 0 ? (
+        <span className="pointer-events-none absolute bottom-full right-0 z-10 mb-2 hidden whitespace-nowrap rounded-lg bg-foreground px-3.5 py-2.5 text-left font-sans text-xs font-bold leading-6 text-white shadow-[0_10px_26px_rgba(29,45,37,0.28)] [text-shadow:none] group-hover:block group-focus-visible:block">
+          <span className="flex items-center gap-2">
+            <span
+              className="size-2 rounded-[3px]"
+              style={{ background: CLAUDE_COLOR }}
+            />
+            Claude Code {formatTokenAmount(claudeTokens)} · {claudePct}%
+          </span>
+          <span className="flex items-center gap-2">
+            <span
+              className="size-2 rounded-[3px]"
+              style={{ background: CODEX_COLOR }}
+            />
+            Codex {formatTokenAmount(codexTokens)} · {codexPct}%
+          </span>
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -247,12 +299,18 @@ export function RankingContent({
                       <span
                         className={
                           featured
-                            ? "ml-auto shrink-0 font-mono text-xl font-black"
-                            : "ml-auto shrink-0 font-mono text-sm font-black"
+                            ? "ml-auto shrink-0 font-mono text-xl font-black sm:hidden"
+                            : "ml-auto shrink-0 font-mono text-sm font-black sm:hidden"
                         }
                       >
                         {entry.scoreLabel}
                       </span>
+                      <ProviderScorePill
+                        claudeTokens={entry.claudeTokens}
+                        codexTokens={entry.codexTokens}
+                        scoreLabel={entry.scoreLabel}
+                        featured={featured}
+                      />
                     </div>
                     <ProviderShareBar
                       claudeTokens={entry.claudeTokens}
@@ -263,7 +321,7 @@ export function RankingContent({
                 );
               });
             })()}
-            <div className="flex gap-4 text-[11px] font-bold text-muted">
+            <div className="flex gap-4 text-[11px] font-bold text-muted sm:hidden">
               <span className="flex items-center gap-1.5">
                 <span
                   className="size-2 rounded-full"

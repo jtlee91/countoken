@@ -27,18 +27,18 @@ function Card({
 function HeaderSkeleton() {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
-      <div className="mx-auto grid min-h-[72px] w-full max-w-7xl grid-cols-1 items-center gap-3 px-4 py-3 sm:px-6 md:grid-cols-[auto_1fr_auto] lg:px-8">
+      <div className="mx-auto grid min-h-14 w-full max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-2 px-3 py-2 sm:px-6 md:min-h-[72px] md:gap-3 md:py-3 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
-          <SkeletonBlock className="size-[52px] rounded-xl" />
-          <SkeletonBlock className="h-6 w-28" />
+          <SkeletonBlock className="size-9 rounded-xl md:size-[52px]" />
+          <SkeletonBlock className="hidden h-6 w-28 md:block" />
         </div>
-        <div className="flex min-w-0 justify-start gap-2 p-0.5 md:justify-center">
-          <SkeletonBlock className="h-10 w-[68px]" />
-          <SkeletonBlock className="h-10 w-[68px]" />
+        <div className="flex min-w-0 justify-center gap-2 p-0.5">
+          <SkeletonBlock className="h-10 w-[64px] md:w-[68px]" />
+          <SkeletonBlock className="h-10 w-[64px] md:w-[68px]" />
         </div>
-        <div className="flex items-center justify-start gap-2 md:justify-end">
-          <SkeletonBlock className="h-10 w-[132px]" />
-          <SkeletonBlock className="h-10 w-11" />
+        <div className="flex items-center justify-end gap-2">
+          <SkeletonBlock className="size-9 rounded-full md:h-10 md:w-[132px] md:rounded-md" />
+          <SkeletonBlock className="hidden h-10 w-11 md:block" />
         </div>
       </div>
     </header>

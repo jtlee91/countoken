@@ -1,0 +1,147 @@
+"use client";
+
+import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
+
+import type { DashboardSession } from "@/lib/data/models";
+import { formatTokenAmount } from "@/lib/format/tokens";
+
+const timeFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+const hourMinuteFormatter = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+function formatTimestamp(value: string) {
+  return timeFormatter
+    .format(new Date(value))
+    .replace(/\s+/g, " ")
+    .replace(/(\d{2})\. (\d{2})\./, "$1.$2.")
+    .trim();
+}
+
+function formatDuration(startedAt: string, endedAt: string) {
+  const minutes = Math.max(
+    0,
+    Math.round(
+      (new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60000,
+    ),
+  );
+
+  if (minutes < 60) {
+    return `${minutes}분`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest > 0 ? `${hours}시간 ${rest}분` : `${hours}시간`;
+}
+
+function compositionSegments(session: DashboardSession) {
+  const total = Math.max(1, session.totalTokens);
+  const pct = (value: number) => Math.round((value / total) * 100);
+
+  return [
+    { className: "bg-code-blue", width: pct(session.inputTokens) },
+    { className: "bg-token-green", width: pct(session.cacheTokens) },
+    { className: "bg-badge-gold", width: pct(session.outputTokens) },
+  ].filter((segment) => segment.width > 0);
+}
+
+// 모바일 전용 — 한 줄 요약을 탭하면 세션 상세가 펼쳐진다
+export function RecentSessionsAccordion({
+  sessions,
+}: {
+  sessions: DashboardSession[];
+}) {
+  const [openKey, setOpenKey] = useState<string | null>(null);
+
+  return (
+    <div className="sm:hidden">
+      {sessions.map((session) => {
+        const key = `${session.provider}-${session.sessionHash}`;
+        const open = openKey === key;
+
+        return (
+          <div key={key} className="border-b border-border last:border-b-0">
+            <button
+              type="button"
+              onClick={() => setOpenKey(open ? null : key)}
+              aria-expanded={open}
+              className="flex min-h-12 w-full items-center gap-2 py-3 text-left"
+            >
+              <span className="min-w-0 flex-1 truncate text-sm font-black">
+                {session.providerLabel}
+              </span>
+              <span className="shrink-0 font-mono text-[11px] font-extrabold text-muted">
+                {formatTimestamp(session.startedAt)}
+              </span>
+              <span className="shrink-0 font-mono text-[13px] font-black">
+                {formatTokenAmount(session.totalTokens)}
+              </span>
+              {open ? (
+                <ChevronDown
+                  size={14}
+                  className="shrink-0 text-muted"
+                  aria-hidden="true"
+                />
+              ) : (
+                <ChevronRight
+                  size={14}
+                  className="shrink-0 text-muted"
+                  aria-hidden="true"
+                />
+              )}
+            </button>
+            {open ? (
+              <div className="mb-3 rounded-lg border border-border bg-background p-3">
+                <div className="flex h-1.5 overflow-hidden rounded-full">
+                  {compositionSegments(session).map((segment) => (
+                    <span
+                      key={segment.className}
+                      className={`${segment.className} h-full`}
+                      style={{ width: `${segment.width}%` }}
+                    />
+                  ))}
+                </div>
+                <dl className="mt-2.5 space-y-1.5 text-xs font-bold text-muted">
+                  <div className="flex items-center justify-between gap-3">
+                    <dt>세션 시간</dt>
+                    <dd className="font-mono font-extrabold text-foreground">
+                      {hourMinuteFormatter.format(new Date(session.startedAt))}{" "}
+                      → {hourMinuteFormatter.format(new Date(session.endedAt))}{" "}
+                      ({formatDuration(session.startedAt, session.endedAt)})
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt>기기</dt>
+                    <dd className="truncate font-extrabold text-foreground">
+                      {session.deviceLabel}
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <dt>프롬프트 · LLM 호출</dt>
+                    <dd className="font-mono font-extrabold text-foreground">
+                      {session.userTurnCount.toLocaleString("ko-KR")} ·{" "}
+                      {session.llmCallCount.toLocaleString("ko-KR")}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}

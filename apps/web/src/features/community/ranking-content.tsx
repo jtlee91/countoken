@@ -37,18 +37,13 @@ function providerPillBackground(claudeTokens: number, codexTokens: number) {
 function ProviderShareBar({
   claudeTokens,
   codexTokens,
-  maxTokens,
 }: {
   claudeTokens: number;
   codexTokens: number;
-  maxTokens: number;
 }) {
   const total = claudeTokens + codexTokens;
   const claudePct = total > 0 ? Math.round((claudeTokens / total) * 100) : 0;
   const codexPct = total > 0 ? 100 - claudePct : 0;
-  // 1위 대비 상대 길이 (너무 짧으면 안 보이므로 8% 하한)
-  const widthPct =
-    maxTokens > 0 ? Math.max(8, Math.round((total / maxTokens) * 100)) : 0;
 
   if (total <= 0) {
     return <div className="mt-2.5 h-2 rounded-full bg-background sm:hidden" />;
@@ -62,7 +57,6 @@ function ProviderShareBar({
       <div
         className="h-full overflow-hidden rounded-full"
         style={{
-          width: `${widthPct}%`,
           background: providerPillBackground(claudeTokens, codexTokens),
         }}
       />
@@ -267,60 +261,53 @@ export function RankingContent({
 
         {entries.length > 0 ? (
           <div className="grid gap-3">
-            {(() => {
-              const maxTokens = Math.max(
-                ...entries.map((entry) => entry.claudeTokens + entry.codexTokens),
-              );
+            {entries.map((entry) => {
+              const featured = entry.rank === 1;
 
-              return entries.map((entry) => {
-                const featured = entry.rank === 1;
-
-                return (
-                  <article
-                    key={entry.rank}
-                    className={
-                      featured
-                        ? "rounded-lg border border-badge-gold/40 bg-gradient-to-r from-badge-gold/15 to-white p-4 shadow-[0_16px_34px_rgba(119,82,13,0.12)]"
-                        : "rounded-lg border border-border bg-background p-3"
-                    }
-                  >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <RankMark rank={entry.rank} />
-                      <EntryAvatar entry={entry} featured={featured} />
-                      <p
-                        className={
-                          featured
-                            ? "min-w-0 flex-1 truncate text-lg font-black"
-                            : "min-w-0 flex-1 truncate text-sm font-extrabold"
-                        }
-                      >
-                        {entry.displayName}
-                      </p>
-                      <span
-                        className={
-                          featured
-                            ? "ml-auto shrink-0 font-mono text-xl font-black sm:hidden"
-                            : "ml-auto shrink-0 font-mono text-sm font-black sm:hidden"
-                        }
-                      >
-                        {entry.scoreLabel}
-                      </span>
-                      <ProviderScorePill
-                        claudeTokens={entry.claudeTokens}
-                        codexTokens={entry.codexTokens}
-                        scoreLabel={entry.scoreLabel}
-                        featured={featured}
-                      />
-                    </div>
-                    <ProviderShareBar
+              return (
+                <article
+                  key={entry.rank}
+                  className={
+                    featured
+                      ? "rounded-lg border border-badge-gold/40 bg-gradient-to-r from-badge-gold/15 to-white p-4 shadow-[0_16px_34px_rgba(119,82,13,0.12)]"
+                      : "rounded-lg border border-border bg-background p-3"
+                  }
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <RankMark rank={entry.rank} />
+                    <EntryAvatar entry={entry} featured={featured} />
+                    <p
+                      className={
+                        featured
+                          ? "min-w-0 flex-1 truncate text-lg font-black"
+                          : "min-w-0 flex-1 truncate text-sm font-extrabold"
+                      }
+                    >
+                      {entry.displayName}
+                    </p>
+                    <span
+                      className={
+                        featured
+                          ? "ml-auto shrink-0 font-mono text-xl font-black sm:hidden"
+                          : "ml-auto shrink-0 font-mono text-sm font-black sm:hidden"
+                      }
+                    >
+                      {entry.scoreLabel}
+                    </span>
+                    <ProviderScorePill
                       claudeTokens={entry.claudeTokens}
                       codexTokens={entry.codexTokens}
-                      maxTokens={maxTokens}
+                      scoreLabel={entry.scoreLabel}
+                      featured={featured}
                     />
-                  </article>
-                );
-              });
-            })()}
+                  </div>
+                  <ProviderShareBar
+                    claudeTokens={entry.claudeTokens}
+                    codexTokens={entry.codexTokens}
+                  />
+                </article>
+              );
+            })}
             <div className="flex gap-4 text-[11px] font-bold text-muted sm:hidden">
               <span className="flex items-center gap-1.5">
                 <span
@@ -340,10 +327,12 @@ export function RankingContent({
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-border bg-background p-6">
-            <p className="text-lg font-black">아직 공개 랭킹 데이터가 없습니다.</p>
+            <p className="text-lg font-black">
+              아직 공개 랭킹 데이터가 없습니다.
+            </p>
             <p className="mt-2 text-sm font-bold leading-6 text-muted">
-              실제 사용량 업로드와 랭킹 집계가 들어오면 이 영역에 공개
-              opt-in 사용자만 표시됩니다.
+              실제 사용량 업로드와 랭킹 집계가 들어오면 이 영역에 공개 opt-in
+              사용자만 표시됩니다.
             </p>
           </div>
         )}
@@ -382,9 +371,7 @@ export function RankingContent({
               ) : null}
               <div className="flex items-center justify-between border-t border-border py-2.5">
                 <dt className="text-sm font-bold text-muted">보유 배지</dt>
-                <dd className="text-sm font-black">
-                  {viewerBadges.length}개
-                </dd>
+                <dd className="text-sm font-black">{viewerBadges.length}개</dd>
               </div>
             </dl>
             {!viewerRanking?.rankPosition ? (
@@ -401,7 +388,6 @@ export function RankingContent({
               )}
             </div>
           </div>
-
         </aside>
       ) : null}
     </div>

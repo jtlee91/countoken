@@ -281,6 +281,8 @@ export function summarizeUsageDailyDashboard(
   const devices = new Set<string>();
 
   let todayTokens = 0;
+  let todaySessions = 0;
+  let todayLLMCalls = 0;
   let weeklyTokens = 0;
   let totalTokens = 0;
   let activeSessions = 0;
@@ -312,6 +314,8 @@ export function summarizeUsageDailyDashboard(
 
     if (usageDate === todayKey) {
       todayTokens += rowTotal;
+      todaySessions += row.session_count;
+      todayLLMCalls += row.llm_call_count;
     }
 
     if (usageDate >= weekStartKey) {
@@ -370,6 +374,9 @@ export function summarizeUsageDailyDashboard(
 
   return {
     todayTokens,
+    todayTurns: 0,
+    todayLLMCalls,
+    todaySessions,
     weeklyTokens,
     totalTokens,
     activeTurns: 0,
@@ -437,6 +444,9 @@ export function summarizeUsageSessions(
   const byAgent = new Map<string, DashboardAgentUsage>();
 
   let todayTokens = 0;
+  let todayTurns = 0;
+  let todaySessions = 0;
+  let todayLLMCalls = 0;
   let weeklyTokens = 0;
   let totalTokens = 0;
   let activeTurns = 0;
@@ -463,6 +473,9 @@ export function summarizeUsageSessions(
 
     if (endedAt >= todayStart) {
       todayTokens += rowTotal;
+      todayTurns += row.user_turn_count;
+      todaySessions += 1;
+      todayLLMCalls += row.llm_call_count;
     }
 
     if (endedAt >= weekStart) {
@@ -524,6 +537,9 @@ export function summarizeUsageSessions(
 
   return {
     todayTokens,
+    todayTurns,
+    todayLLMCalls,
+    todaySessions,
     weeklyTokens,
     totalTokens,
     activeTurns,

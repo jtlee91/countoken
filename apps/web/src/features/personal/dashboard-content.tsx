@@ -171,7 +171,8 @@ function periodDelta(current: number, previous: number, vsLabel: string) {
   const percent = Math.round(((current - previous) / previous) * 100);
   return {
     up: percent >= 0,
-    label: `${percent >= 0 ? "▲" : "▼"} ${Math.abs(percent)}% vs ${vsLabel}`,
+    label: `${percent >= 0 ? "▲" : "▼"} ${Math.abs(percent)}%`,
+    title: `vs ${vsLabel}`,
   };
 }
 
@@ -187,25 +188,26 @@ function todayDelta(dailyUsage: DashboardData["dailyUsage"]) {
   );
 }
 
-function DeltaLine({
+function InlineDelta({
   delta,
 }: {
-  delta: { up: boolean; label: string } | null;
+  delta: { up: boolean; label: string; title: string } | null;
 }) {
   if (!delta) {
     return null;
   }
 
   return (
-    <p
+    <span
+      title={delta.title}
       className={
         delta.up
-          ? "mt-1.5 text-xs font-extrabold text-token-green"
-          : "mt-1.5 text-xs font-extrabold text-alert-red"
+          ? "text-[13px] font-extrabold text-token-green"
+          : "text-[13px] font-extrabold text-alert-red"
       }
     >
       {delta.label}
-    </p>
+    </span>
   );
 }
 
@@ -274,7 +276,11 @@ export function DashboardContent({
       label: "오늘",
       value: formatTokenAmount(dashboard.todayTokens),
       delta,
-      counts: null,
+      counts: {
+        sessions: dashboard.todaySessions,
+        prompts: dashboard.todayTurns,
+        llmCalls: dashboard.todayLLMCalls,
+      },
     },
     {
       label: "이번 주",
@@ -357,10 +363,12 @@ export function DashboardContent({
               <p className="text-xs font-extrabold text-muted">
                 {metric.label}
               </p>
-              <p className="mt-1.5 font-mono text-[34px] font-black leading-tight">
-                {metric.value}
+              <p className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5">
+                <span className="font-mono text-[34px] font-black leading-tight">
+                  {metric.value}
+                </span>
+                <InlineDelta delta={metric.delta} />
               </p>
-              <DeltaLine delta={metric.delta} />
               {metric.counts ? (
                 <CountsRow
                   sessions={metric.counts.sessions}

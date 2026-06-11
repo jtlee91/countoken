@@ -22,6 +22,9 @@ const emptyRankingPageData: RankingPageData = {
 
 const emptyDashboardData: DashboardData = {
   todayTokens: 0,
+  todayTurns: 0,
+  todayLLMCalls: 0,
+  todaySessions: 0,
   weeklyTokens: 0,
   totalTokens: 0,
   activeTurns: 0,

@@ -202,6 +202,9 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
     if (!hasPublicSupabaseEnv() || !viewer.userId) {
       return {
         todayTokens: 0,
+        todayTurns: 0,
+        todayLLMCalls: 0,
+        todaySessions: 0,
         weeklyTokens: 0,
         totalTokens: 0,
         activeTurns: 0,
@@ -294,6 +297,7 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
         total_turns: number;
         weekly_turns: number;
         monthly_turns: number;
+        today_turns: number;
       }[])[0] ?? null;
     const viewerRankingRow = rankingResult.find((row) => row.is_viewer) ?? null;
     const dailyRows = (dailyResult.data ?? []) as unknown as UsageDailyAggregateRow[];
@@ -350,6 +354,7 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
       activeTurns: turnTotals?.total_turns ?? 0,
       weeklyTurns: turnTotals?.weekly_turns ?? 0,
       monthlyTurns: turnTotals?.monthly_turns ?? 0,
+      todayTurns: turnTotals?.today_turns ?? 0,
       weeklyRank: viewerRankingRow?.rank_position ?? null,
       weeklyRankScore: viewerRankingRow?.total_tokens ?? null,
     };

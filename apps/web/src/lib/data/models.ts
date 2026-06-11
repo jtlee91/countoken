@@ -102,6 +102,9 @@ export type DashboardSession = {
 
 export type DashboardData = {
   todayTokens: number;
+  todayTurns: number;
+  todayLLMCalls: number;
+  todaySessions: number;
   weeklyTokens: number;
   totalTokens: number;
   activeTurns: number;

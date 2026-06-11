@@ -136,7 +136,8 @@ function EntryAvatar({
   entry: RankingEntry;
   featured: boolean;
 }) {
-  const size = featured ? 36 : 30;
+  // 모바일에서는 1위도 일반 행과 같은 30px, 데스크톱에서만 36px로 강조
+  const sizeClass = featured ? "size-[30px] sm:size-9" : "size-[30px]";
   const avatarUrl = trustedAvatarUrl(entry.avatarUrl);
 
   if (avatarUrl) {
@@ -144,18 +145,16 @@ function EntryAvatar({
       <Image
         src={avatarUrl}
         alt=""
-        width={size}
-        height={size}
-        className="shrink-0 rounded-full object-cover"
-        style={{ width: size, height: size }}
+        width={36}
+        height={36}
+        className={`shrink-0 rounded-full object-cover ${sizeClass}`}
       />
     );
   }
 
   return (
     <span
-      className="grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-token-green to-code-blue font-black text-white"
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }}
+      className={`grid shrink-0 place-items-center rounded-full bg-gradient-to-br from-token-green to-code-blue text-[13px] font-black text-white ${sizeClass}`}
     >
       {entry.displayName.trim().charAt(0).toUpperCase() || "T"}
     </span>
@@ -164,14 +163,18 @@ function EntryAvatar({
 
 function RankMark({ rank }: { rank: number }) {
   if (rank === 1) {
+    // 모바일에서는 일반 순위 배지(36px)와 같은 크기, 데스크톱에서만 크게
     return (
-      <span className="grid size-[58px] place-items-center" aria-label="1위">
+      <span
+        className="grid size-9 place-items-center sm:size-[58px]"
+        aria-label="1위"
+      >
         <Image
           src="/assets/rank-one-crown.png"
           alt=""
           width={58}
           height={58}
-          className="size-[58px] object-contain"
+          className="size-9 object-contain sm:size-[58px]"
         />
       </span>
     );
@@ -269,7 +272,7 @@ export function RankingContent({
                   key={entry.rank}
                   className={
                     featured
-                      ? "rounded-lg border border-badge-gold/40 bg-gradient-to-r from-badge-gold/15 to-white p-4 shadow-[0_16px_34px_rgba(119,82,13,0.12)]"
+                      ? "rounded-lg border border-badge-gold/40 bg-gradient-to-r from-badge-gold/15 to-white p-3 shadow-[0_16px_34px_rgba(119,82,13,0.12)] sm:p-4"
                       : "rounded-lg border border-border bg-background p-3"
                   }
                 >
@@ -279,19 +282,13 @@ export function RankingContent({
                     <p
                       className={
                         featured
-                          ? "min-w-0 flex-1 truncate text-lg font-black"
+                          ? "min-w-0 flex-1 truncate text-sm font-extrabold sm:text-lg sm:font-black"
                           : "min-w-0 flex-1 truncate text-sm font-extrabold"
                       }
                     >
                       {entry.displayName}
                     </p>
-                    <span
-                      className={
-                        featured
-                          ? "ml-auto shrink-0 font-mono text-xl font-black sm:hidden"
-                          : "ml-auto shrink-0 font-mono text-sm font-black sm:hidden"
-                      }
-                    >
+                    <span className="ml-auto shrink-0 font-mono text-sm font-black sm:hidden">
                       {entry.scoreLabel}
                     </span>
                     <ProviderScorePill

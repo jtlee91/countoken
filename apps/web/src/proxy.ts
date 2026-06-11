@@ -36,7 +36,8 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getUser();
+  // 세션 갱신만 필요하므로 Auth 서버 왕복 없이 JWT를 로컬 검증한다
+  await supabase.auth.getClaims();
 
   return response;
 }

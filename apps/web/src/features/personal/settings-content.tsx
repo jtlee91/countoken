@@ -274,8 +274,10 @@ export function SettingsContent({
                           </button>
                         </div>
                       ) : (
-                        <p className="flex items-center gap-2 truncate text-sm font-black">
-                          {device.label}
+                        <p className="flex min-w-0 items-center gap-2 text-sm font-black">
+                          <span className="min-w-0 truncate">
+                            {device.label}
+                          </span>
                           {!revoked ? (
                             <button
                               type="button"
@@ -283,7 +285,7 @@ export function SettingsContent({
                                 setRenamingDeviceId(device.id);
                                 setRenameValue(device.label);
                               }}
-                              className="inline-flex items-center gap-1 text-[11px] font-extrabold text-token-green hover:underline"
+                              className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] font-extrabold text-token-green hover:underline"
                             >
                               <Pencil size={11} aria-hidden="true" />
                               이름 변경

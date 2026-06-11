@@ -37,7 +37,7 @@ export function SiteShell({
               height={52}
               className="size-[52px] shrink-0 rounded-xl object-cover"
             />
-            <span className="truncate text-lg font-black">Token Plane</span>
+            <span className="truncate text-xl font-black">Token Plane</span>
           </Link>
 
           <nav
@@ -55,8 +55,8 @@ export function SiteShell({
                     aria-current={active ? "page" : undefined}
                     className={
                       active
-                        ? "inline-flex min-h-10 shrink-0 items-center rounded-md border border-token-green/30 bg-token-green/10 px-4 py-2 text-sm font-extrabold text-foreground shadow-[inset_0_-2px_0_var(--token-green)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
-                        : "inline-flex min-h-10 shrink-0 items-center rounded-md border border-transparent px-4 py-2 text-sm font-extrabold text-muted hover:border-border hover:bg-surface-alt hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
+                        ? "inline-flex min-h-10 shrink-0 items-center rounded-md border border-token-green/30 bg-token-green/10 px-4 py-2 text-base font-extrabold text-foreground shadow-[inset_0_-2px_0_var(--token-green)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
+                        : "inline-flex min-h-10 shrink-0 items-center rounded-md border border-transparent px-4 py-2 text-base font-extrabold text-muted hover:border-border hover:bg-surface-alt hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
                     }
                   >
                     {item.label}
@@ -71,7 +71,7 @@ export function SiteShell({
               <>
                 <Link
                   href="/me/dashboard"
-                  className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-sm font-extrabold text-foreground hover:border-token-green hover:bg-token-green/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
+                  className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 py-1.5 text-[15px] font-extrabold text-foreground hover:border-token-green hover:bg-token-green/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
                   aria-label={`${viewer.displayName}의 마이페이지`}
                 >
                   <ViewerAvatar viewer={viewer} size={32} />
@@ -92,7 +92,7 @@ export function SiteShell({
             ) : (
               <Link
                 href="/login"
-                className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-extrabold text-muted hover:border-code-blue hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
+                className="inline-flex min-h-10 items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-[15px] font-extrabold text-muted hover:border-code-blue hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
               >
                 <LogIn size={17} aria-hidden="true" />
                 로그인

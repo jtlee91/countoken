@@ -144,7 +144,7 @@ export function SettingsContent({
             event.preventDefault();
             submitSettings();
           }}
-          className="rounded-lg border border-border bg-surface p-5"
+          className="min-w-0 rounded-lg border border-border bg-surface p-5"
         >
           <h2 className="text-xl font-black">프로필</h2>
           <label
@@ -158,7 +158,7 @@ export function SettingsContent({
             name="display_name"
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
-            className="mt-2 min-h-11 w-full rounded-md border border-border bg-background px-3 text-sm font-bold outline-none focus:border-code-blue"
+            className="mt-2 min-h-11 w-full min-w-0 rounded-md border border-border bg-background px-3 text-sm font-bold outline-none focus:border-code-blue"
           />
 
           <div className="mt-5 flex items-center justify-between gap-4 rounded-md border border-border bg-background p-3.5">
@@ -218,7 +218,7 @@ export function SettingsContent({
           ) : null}
         </form>
 
-        <article className="rounded-lg border border-border bg-surface p-5">
+        <article className="min-w-0 rounded-lg border border-border bg-surface p-5">
           <h2 className="text-xl font-black">
             연결된 기기{" "}
             <span className="text-sm font-bold text-muted">

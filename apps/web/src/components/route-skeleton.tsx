@@ -150,7 +150,59 @@ function BadgesSkeleton() {
   );
 }
 
-// 설치/설정: 제목 + 본문 섹션 카드들
+// 설치: 제목+3단계 스텝 카드 + 어두운 코드 블록
+function InstallSkeleton() {
+  return (
+    <div className="space-y-6">
+      <Card className="p-8">
+        <SkeletonBlock className="h-10 w-96 max-w-full" />
+        <SkeletonBlock className="mt-4 h-4 w-3/4" />
+        <div className="mt-7 grid gap-6">
+          {[0, 1, 2].map((index) => (
+            <div
+              key={index}
+              className="grid grid-cols-[44px_minmax(0,1fr)] gap-4"
+            >
+              <SkeletonBlock className="size-8 rounded-full" />
+              <div>
+                <SkeletonBlock className="h-5 w-40" />
+                <SkeletonBlock className="mt-2 h-4 w-2/3" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <div className="animate-pulse rounded-lg bg-foreground/85 p-5">
+        <div className="flex items-center justify-between">
+          <div className="h-4 w-32 rounded bg-white/15" />
+          <div className="h-9 w-28 rounded-md bg-white/15" />
+        </div>
+        <div className="mt-6 h-4 w-2/3 rounded bg-white/10" />
+        <div className="mt-3 h-4 w-1/2 rounded bg-white/10" />
+        <div className="mt-3 h-4 w-3/5 rounded bg-white/10" />
+        <div className="mt-3 h-4 w-2/5 rounded bg-white/10" />
+      </div>
+    </div>
+  );
+}
+
+// MyPageShell과 같은 좌측 탭 메뉴 + 본문 2단 그리드
+function MyPageFrame({ children }: { children: ReactNode }) {
+  return (
+    <div className="grid gap-5 lg:grid-cols-[230px_minmax(0,1fr)]">
+      <aside className="self-start rounded-lg border border-border bg-surface p-4">
+        <div className="grid gap-2">
+          <SkeletonBlock className="h-10 w-full" />
+          <SkeletonBlock className="h-10 w-full" />
+          <SkeletonBlock className="h-10 w-full" />
+        </div>
+      </aside>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+// 설정: 제목 + 본문 섹션 카드들
 function ArticleSkeleton() {
   return (
     <div className="space-y-5">
@@ -200,10 +252,26 @@ function ShareSkeleton() {
 
 const variants = {
   ranking: RankingSkeleton,
+  install: InstallSkeleton,
   dashboard: DashboardSkeleton,
   badges: BadgesSkeleton,
   article: ArticleSkeleton,
   share: ShareSkeleton,
+  "me-dashboard": () => (
+    <MyPageFrame>
+      <DashboardSkeleton />
+    </MyPageFrame>
+  ),
+  "me-badges": () => (
+    <MyPageFrame>
+      <BadgesSkeleton />
+    </MyPageFrame>
+  ),
+  "me-settings": () => (
+    <MyPageFrame>
+      <ArticleSkeleton />
+    </MyPageFrame>
+  ),
 } as const;
 
 export function RouteSkeleton({

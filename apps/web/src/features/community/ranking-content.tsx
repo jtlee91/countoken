@@ -215,6 +215,22 @@ export function RankingContent({
           <h1 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
             Global weekly
           </h1>
+          <div className="mt-2.5 flex gap-4 text-[11px] font-bold text-muted">
+            <span className="flex items-center gap-1.5">
+              <span
+                className="size-2 rounded-full"
+                style={{ background: CLAUDE_COLOR }}
+              />
+              Claude
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span
+                className="size-2 rounded-full"
+                style={{ background: CODEX_COLOR }}
+              />
+              Codex
+            </span>
+          </div>
         </div>
 
         {entries.length > 0 ? (
@@ -260,22 +276,6 @@ export function RankingContent({
                 </article>
               );
             })}
-            <div className="flex gap-4 text-[11px] font-bold text-muted sm:hidden">
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="size-2 rounded-full"
-                  style={{ background: CLAUDE_COLOR }}
-                />
-                Claude
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span
-                  className="size-2 rounded-full"
-                  style={{ background: CODEX_COLOR }}
-                />
-                Codex
-              </span>
-            </div>
           </div>
         ) : (
           <div className="rounded-lg border border-dashed border-border bg-background p-6">

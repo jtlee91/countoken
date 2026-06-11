@@ -1,4 +1,8 @@
-import type { DashboardData, ViewerProfile } from "@/lib/data/models";
+import type {
+  DashboardData,
+  UsageBreakdownSummary,
+  ViewerProfile,
+} from "@/lib/data/models";
 import {
   formatTokenAmount,
   formatTokenSharePercent,
@@ -215,6 +219,93 @@ function InlineDelta({
   );
 }
 
+const CLAUDE_COLOR = "#d97757";
+const CODEX_COLOR = "#10a37f";
+
+function TooltipRow({
+  color,
+  label,
+  value,
+  total,
+}: {
+  color: string;
+  label: string;
+  value: number;
+  total: number;
+}) {
+  return (
+    <span className="flex items-center gap-2">
+      <span
+        className="size-2 shrink-0 rounded-[3px]"
+        style={{ background: color }}
+      />
+      {label}
+      <span className="ml-auto font-mono">{formatTokenAmount(value)}</span>
+      <span className="w-9 text-right font-mono text-white/60">
+        {total > 0 ? Math.round((value / total) * 100) : 0}%
+      </span>
+    </span>
+  );
+}
+
+// 히어로 지표 칼럼 호버 시 기간별 에이전트/토큰 구성 상세를 보여준다
+function HeroBreakdownTooltip({
+  periodLabel,
+  breakdown,
+}: {
+  periodLabel: string;
+  breakdown: UsageBreakdownSummary;
+}) {
+  const total =
+    breakdown.inputTokens + breakdown.cacheTokens + breakdown.outputTokens;
+
+  if (total <= 0) {
+    return null;
+  }
+
+  return (
+    <span className="pointer-events-none absolute left-0 top-full z-10 mt-1 hidden w-60 rounded-lg bg-foreground px-3.5 py-3 text-left text-xs font-bold leading-6 text-white shadow-[0_10px_26px_rgba(29,45,37,0.28)] group-hover:block group-focus-visible:block">
+      <span className="block text-[10px] font-black tracking-[0.06em] text-white/50">
+        {periodLabel} · 에이전트별
+      </span>
+      <TooltipRow
+        color={CODEX_COLOR}
+        label="Codex"
+        value={breakdown.codexTokens}
+        total={total}
+      />
+      <TooltipRow
+        color={CLAUDE_COLOR}
+        label="Claude Code"
+        value={breakdown.claudeTokens}
+        total={total}
+      />
+      <span className="my-2 block border-t border-white/15" />
+      <span className="block text-[10px] font-black tracking-[0.06em] text-white/50">
+        토큰 구성
+      </span>
+      <TooltipRow
+        color="var(--code-blue)"
+        label="입력"
+        value={breakdown.inputTokens}
+        total={total}
+      />
+      <TooltipRow
+        color="var(--token-green)"
+        label="캐시"
+        value={breakdown.cacheTokens}
+        total={total}
+      />
+      <TooltipRow
+        color="var(--badge-gold)"
+        label="출력"
+        value={breakdown.outputTokens}
+        total={total}
+      />
+    </span>
+  );
+}
+
 function CountsRow({
   sessions,
   prompts,
@@ -278,6 +369,7 @@ export function DashboardContent({
   const heroMetrics = [
     {
       label: "오늘",
+      breakdown: dashboard.todayBreakdown,
       value: formatTokenAmount(dashboard.todayTokens),
       delta,
       counts: {
@@ -288,6 +380,7 @@ export function DashboardContent({
     },
     {
       label: "이번 주",
+      breakdown: dashboard.weeklyBreakdown,
       value: formatTokenAmount(dashboard.weeklyTokens),
       delta: periodDelta(
         dashboard.weeklyTokens,
@@ -302,6 +395,7 @@ export function DashboardContent({
     },
     {
       label: "이번 달",
+      breakdown: dashboard.monthlyBreakdown,
       value: formatTokenAmount(dashboard.monthlyTokens),
       delta: periodDelta(
         dashboard.monthlyTokens,
@@ -316,6 +410,7 @@ export function DashboardContent({
     },
     {
       label: "전체",
+      breakdown: dashboard.totalBreakdown,
       value: formatTokenAmount(dashboard.totalTokens),
       delta: null,
       counts: {
@@ -373,12 +468,17 @@ export function DashboardContent({
           {heroMetrics.map((metric, index) => (
             <div
               key={metric.label}
+              tabIndex={0}
               className={
                 index === 0
-                  ? "py-2 sm:pr-5"
-                  : "border-t border-border py-2 sm:border-l sm:border-t-0 sm:px-5"
+                  ? "group relative cursor-default py-2 sm:pr-5"
+                  : "group relative cursor-default border-t border-border py-2 sm:border-l sm:border-t-0 sm:px-5"
               }
             >
+              <HeroBreakdownTooltip
+                periodLabel={metric.label}
+                breakdown={metric.breakdown}
+              />
               <p className="text-xs font-extrabold text-muted">
                 {metric.label}
               </p>

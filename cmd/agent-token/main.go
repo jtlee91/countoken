@@ -25,6 +25,11 @@ import (
 
 var kst = time.FixedZone("KST", 9*60*60)
 
+// version is the released build version, injected at build time via
+// -ldflags "-X main.version=<tag>". Local/dev builds keep "dev" and never
+// self-update.
+var version = "dev"
+
 var syncHTTPClient = http.DefaultClient
 
 type inspectResult struct {
@@ -124,6 +129,10 @@ func runInspect(args []string, stdout io.Writer) error {
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
+
+	// Best-effort: pick up a newer release while the hook is already running.
+	// Never blocks or fails inspect.
+	maybeSelfUpdate(*stateDir)
 
 	var result inspectResult
 	switch *provider {

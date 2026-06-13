@@ -8,12 +8,18 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jtlee/local-agent-usage/internal/usage"
 	_ "modernc.org/sqlite"
 )
+
+// parserVersion tracks the Claude/Codex token-parsing logic. Bump it whenever
+// that logic changes so existing local caches are dropped and re-parsed on the
+// next run, and the corrected sessions are re-uploaded.
+const parserVersion = 2
 
 type Store struct {
 	db *sql.DB
@@ -568,6 +574,11 @@ func (store *Store) migrate(ctx context.Context) error {
 			updated_at text not null
 		);
 
+		create table if not exists meta (
+			key text primary key,
+			value text not null
+		);
+
 		create index if not exists idx_sessions_provider_started_at on sessions(provider, started_at);
 		create index if not exists idx_source_files_provider_modified_at on source_files(provider, modified_at);
 		create index if not exists idx_usage_calls_session on usage_calls(provider, session_hash, call_index);
@@ -582,10 +593,52 @@ func (store *Store) migrate(ctx context.Context) error {
 	if err := store.dropRemovedTokenColumns(ctx); err != nil {
 		return err
 	}
-	_, err = store.db.ExecContext(ctx, `
+	if _, err = store.db.ExecContext(ctx, `
 		create index if not exists idx_sessions_need_sync on sessions(need_sync, provider, started_at);
-	`)
-	return err
+	`); err != nil {
+		return err
+	}
+	return store.applyParserVersion(ctx)
+}
+
+// applyParserVersion drops the cached source files and marks every session for
+// re-sync when the stored parser version is older than the current one, so the
+// next inspect re-parses all files with the updated logic and re-uploads the
+// corrected totals. A missing marker is treated as version 0 (covers upgrades
+// from binaries that predate this table).
+func (store *Store) applyParserVersion(ctx context.Context) error {
+	stored := 0
+	var raw string
+	switch err := store.db.QueryRowContext(ctx, `select value from meta where key = 'parser_version'`).Scan(&raw); err {
+	case nil:
+		stored, _ = strconv.Atoi(strings.TrimSpace(raw))
+	case sql.ErrNoRows:
+		stored = 0
+	default:
+		return err
+	}
+	if stored >= parserVersion {
+		return nil
+	}
+
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `delete from source_files`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `update sessions set need_sync = 1, synced_at = null`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		insert into meta (key, value) values ('parser_version', ?)
+		on conflict(key) do update set value = excluded.value
+	`, strconv.Itoa(parserVersion)); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (store *Store) dropRemovedTokenColumns(ctx context.Context) error {

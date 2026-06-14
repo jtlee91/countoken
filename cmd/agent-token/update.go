@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	updateRepo          = "jtlee91/agent-token-plane"
+	updateRepo          = "jtlee91/countoken"
 	updateCheckInterval = time.Hour
 )
 

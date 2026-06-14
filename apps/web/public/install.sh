@@ -3,7 +3,7 @@
 # Usage: curl -fsSL https://<site>/install.sh | bash
 set -euo pipefail
 
-REPO="jtlee91/agent-token-plane"
+REPO="jtlee91/countoken"
 STATE_DIR="${HOME}/.countoken"
 BIN_DIR="${STATE_DIR}/bin"
 HOOKS_DIR="${STATE_DIR}/hooks"

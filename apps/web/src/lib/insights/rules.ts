@@ -194,27 +194,6 @@ const nightOwl: Rule = (m) => {
   };
 };
 
-// 누적 기록 — 항상 노출되는 폴백(점수 최하). 전체 마일스톤 요약.
-const milestone: Rule = (m) => {
-  if (!m.totals || m.totals.tokens <= 0) return null;
-  const t = m.totals;
-  const span =
-    t.firstDay && t.lastDay
-      ? Math.max(1, daysBetween(t.firstDay, t.lastDay))
-      : null;
-  const spanText = span ? `${Math.round(span / 30)}개월간 ` : "";
-  const amount = `${formatTokenAmount(t.tokens)} 토큰`;
-  return {
-    id: "milestone",
-    icon: "🏆",
-    category: "누적 기록",
-    headline: `${spanText}누적 ${amount}을 흘려보냈어요`,
-    highlight: amount,
-    sub: `${t.sessions.toLocaleString("ko-KR")} 세션 · ${t.turns.toLocaleString("ko-KR")} 프롬프트 · ${t.llmCalls.toLocaleString("ko-KR")} LLM 호출`,
-    score: 5,
-  };
-};
-
 const RULES: Rule[] = [
   peakWeekday,
   goldenHour,
@@ -222,7 +201,6 @@ const RULES: Rule[] = [
   agentStyle,
   peakRecord,
   nightOwl,
-  milestone,
 ];
 
 export function selectInsights(m: InsightMetrics, limit = 6): Insight[] {

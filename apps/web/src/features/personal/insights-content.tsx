@@ -108,9 +108,54 @@ function InsightChartView({ chart }: { chart: InsightChart }) {
   return <HoursChart data={chart.data} peak={chart.peak} />;
 }
 
-// 누적 기록은 풀폭, 나머지는 반폭
-function cardSpan(insight: Insight) {
-  return insight.id === "milestone" ? "lg:col-span-2" : "";
+// 카드 노출 순서 — 1행(차트): 요일패턴·골든아워, 2행(스탯): 연속사용·최고기록·에이전트
+const DISPLAY_ORDER = [
+  "peak_weekday",
+  "golden_hour",
+  "streak",
+  "peak_record",
+  "agent_style",
+  "night_owl",
+];
+
+function orderRank(insight: Insight) {
+  const rank = DISPLAY_ORDER.indexOf(insight.id);
+  return rank === -1 ? DISPLAY_ORDER.length : rank;
+}
+
+function InsightCard({ insight }: { insight: Insight }) {
+  return (
+    <article className="rounded-lg border border-border bg-background p-5">
+      <span className="mb-3 flex items-center gap-1.5 text-[11px] font-black text-muted">
+        <span className="text-sm">{insight.icon}</span>
+        {insight.category}
+      </span>
+      {insight.metric ? (
+        <p className="flex items-baseline gap-2">
+          <span
+            className={`text-[30px] font-black leading-none ${
+              insight.metric.accent ? "text-token-green" : ""
+            }`}
+          >
+            {insight.metric.value}
+          </span>
+          {insight.metric.unit ? (
+            <span className="text-[15px] font-extrabold text-muted">
+              {insight.metric.unit}
+            </span>
+          ) : null}
+        </p>
+      ) : (
+        <p className="text-[19px] font-black leading-tight">
+          {renderHeadline(insight.headline, insight.highlight)}
+        </p>
+      )}
+      <p className="mt-2.5 text-xs font-bold leading-5 text-muted">
+        {renderEmphasis(insight.sub)}
+      </p>
+      {insight.chart ? <InsightChartView chart={insight.chart} /> : null}
+    </article>
+  );
 }
 
 export function InsightsContent({
@@ -120,6 +165,10 @@ export function InsightsContent({
   viewer: ViewerProfile;
   insights: Insight[];
 }) {
+  const ordered = [...insights].sort((a, b) => orderRank(a) - orderRank(b));
+  const chartCards = ordered.filter((insight) => insight.chart);
+  const statCards = ordered.filter((insight) => !insight.chart);
+
   return (
     <section className="rounded-xl border border-border bg-surface p-6 shadow-[0_18px_45px_rgba(29,45,37,0.08)]">
       <p className="text-sm font-extrabold text-token-green">
@@ -133,46 +182,21 @@ export function InsightsContent({
       </p>
 
       {insights.length > 0 ? (
-        <div className="mt-6 grid grid-cols-1 gap-3 lg:grid-cols-2">
-          {insights.map((insight) => (
-            <article
-              key={insight.id}
-              className={`rounded-lg border border-border bg-background p-5 ${cardSpan(
-                insight,
-              )}`}
-            >
-              <span className="mb-3 flex items-center gap-1.5 text-[11px] font-black text-muted">
-                <span className="text-sm">{insight.icon}</span>
-                {insight.category}
-              </span>
-              {insight.metric ? (
-                <p className="flex items-baseline gap-2">
-                  <span
-                    className={`text-[30px] font-black leading-none ${
-                      insight.metric.accent ? "text-token-green" : ""
-                    }`}
-                  >
-                    {insight.metric.value}
-                  </span>
-                  {insight.metric.unit ? (
-                    <span className="text-[15px] font-extrabold text-muted">
-                      {insight.metric.unit}
-                    </span>
-                  ) : null}
-                </p>
-              ) : (
-                <p className="text-[19px] font-black leading-tight">
-                  {renderHeadline(insight.headline, insight.highlight)}
-                </p>
-              )}
-              <p className="mt-2.5 text-xs font-bold leading-5 text-muted">
-                {renderEmphasis(insight.sub)}
-              </p>
-              {insight.chart ? (
-                <InsightChartView chart={insight.chart} />
-              ) : null}
-            </article>
-          ))}
+        <div className="mt-6 space-y-3">
+          {chartCards.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {chartCards.map((insight) => (
+                <InsightCard key={insight.id} insight={insight} />
+              ))}
+            </div>
+          ) : null}
+          {statCards.length > 0 ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {statCards.map((insight) => (
+                <InsightCard key={insight.id} insight={insight} />
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : (
         <p className="mt-6 rounded-md border border-dashed border-border bg-background p-5 text-sm font-bold leading-6 text-muted">

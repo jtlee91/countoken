@@ -221,6 +221,7 @@ function MyPageFrame({ children }: { children: ReactNode }) {
           <SkeletonBlock className="h-10 flex-1 lg:w-full" />
           <SkeletonBlock className="h-10 flex-1 lg:w-full" />
           <SkeletonBlock className="h-10 flex-1 lg:w-full" />
+          <SkeletonBlock className="h-10 flex-1 lg:w-full" />
         </div>
       </aside>
       <div className="min-w-0">{children}</div>

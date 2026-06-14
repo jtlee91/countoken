@@ -31,11 +31,11 @@ export function SiteShell({
             aria-label="Ranking 화면으로 이동"
           >
             <Image
-              src="/assets/token-plane-logo.png"
+              src="/assets/countoken-logo.svg"
               alt=""
               width={52}
               height={52}
-              className="size-9 shrink-0 rounded-xl object-cover md:size-[52px]"
+              className="size-9 shrink-0 md:size-[52px]"
             />
             <span className="hidden truncate text-xl font-black md:inline">
               Countoken

@@ -10,11 +10,11 @@ export function ShareCardContent({ card }: { card: ShareCard }) {
         <div className="border-b border-border bg-gradient-to-r from-token-green/15 via-code-blue/10 to-badge-gold/15 p-6">
           <div className="flex items-center gap-3">
             <Image
-              src="/assets/token-plane-logo.png"
+              src="/assets/countoken-logo.svg"
               alt=""
               width={52}
               height={52}
-              className="size-[52px] rounded-xl object-cover"
+              className="size-[52px]"
             />
             <div>
               <p className="text-sm font-extrabold text-token-green">

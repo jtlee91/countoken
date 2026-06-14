@@ -1,7 +1,37 @@
+import type { ReactNode } from "react";
+
 import type { ViewerProfile } from "@/lib/data/models";
 import type { Insight, InsightChart } from "@/lib/insights/types";
 
 const DOW_NAMES = ["일", "월", "화", "수", "목", "금", "토"];
+
+// *별표*로 감싼 구간을 굵게 렌더
+function renderEmphasis(text: string): ReactNode[] {
+  return text.split("*").map((part, index) =>
+    index % 2 === 1 ? (
+      <b key={index} className="font-extrabold text-foreground">
+        {part}
+      </b>
+    ) : (
+      <span key={index}>{part}</span>
+    ),
+  );
+}
+
+// headline 중 highlight 문자열을 초록으로 강조
+function renderHeadline(headline: string, highlight?: string): ReactNode {
+  if (!highlight || !headline.includes(highlight)) {
+    return headline;
+  }
+  const [before, after] = headline.split(highlight);
+  return (
+    <>
+      {before}
+      <span className="text-token-green">{highlight}</span>
+      {after}
+    </>
+  );
+}
 
 function WeekdayChart({ data, highlight }: { data: number[]; highlight: number }) {
   const max = Math.max(...data, 1);
@@ -107,18 +137,36 @@ export function InsightsContent({
           {insights.map((insight) => (
             <article
               key={insight.id}
-              className={`rounded-lg border border-border bg-background p-4 ${cardSpan(
+              className={`rounded-lg border border-border bg-background p-5 ${cardSpan(
                 insight,
               )}`}
             >
-              <span className="mb-2.5 flex items-center gap-1.5 text-[11px] font-black text-muted">
+              <span className="mb-3 flex items-center gap-1.5 text-[11px] font-black text-muted">
                 <span className="text-sm">{insight.icon}</span>
+                {insight.category}
               </span>
-              <p className="text-[17px] font-black leading-tight">
-                {insight.headline}
-              </p>
-              <p className="mt-2 text-xs font-bold leading-5 text-muted">
-                {insight.sub}
+              {insight.metric ? (
+                <p className="flex items-baseline gap-2">
+                  <span
+                    className={`text-[30px] font-black leading-none ${
+                      insight.metric.accent ? "text-token-green" : ""
+                    }`}
+                  >
+                    {insight.metric.value}
+                  </span>
+                  {insight.metric.unit ? (
+                    <span className="text-[15px] font-extrabold text-muted">
+                      {insight.metric.unit}
+                    </span>
+                  ) : null}
+                </p>
+              ) : (
+                <p className="text-[19px] font-black leading-tight">
+                  {renderHeadline(insight.headline, insight.highlight)}
+                </p>
+              )}
+              <p className="mt-2.5 text-xs font-bold leading-5 text-muted">
+                {renderEmphasis(insight.sub)}
               </p>
               {insight.chart ? (
                 <InsightChartView chart={insight.chart} />

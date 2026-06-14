@@ -85,8 +85,9 @@ const peakWeekday: Rule = (m) => {
   return {
     id: "peak_weekday",
     icon: "📅",
+    category: "요일 패턴",
     headline: `${DOW_NAMES[i]}요일이 가장 뜨거워요`,
-    sub: `전체 사용량의 ${pct}% — 다른 요일 평균의 ${ratio.toFixed(1)}배`,
+    sub: `전체 사용량의 *${pct}%* — 다른 요일 평균의 *${ratio.toFixed(1)}배*`,
     score: 40 + ratio * 10,
     chart: { kind: "weekday", data: m.dowTokens, highlight: i },
   };
@@ -101,11 +102,12 @@ const goldenHour: Rule = (m) => {
   if (share < 0.1) return null;
   const win = activeWindow(m.hourTokens);
   const sub = win
-    ? `활동의 대부분이 ${formatHour(win.start)}–${formatHour(win.end)}에 집중돼요`
-    : `하루 토큰의 ${Math.round(share * 100)}%가 이 시간대에 몰려요`;
+    ? `활동의 대부분이 *${formatHour(win.start)}–${formatHour(win.end)}*에 집중돼요`
+    : `하루 토큰의 *${Math.round(share * 100)}%*가 이 시간대에 몰려요`;
   return {
     id: "golden_hour",
     icon: "🕐",
+    category: "골든아워",
     headline: `${formatHour(peak)}가 가장 활발해요`,
     sub,
     score: 30 + share * 40,
@@ -120,12 +122,14 @@ const streak: Rule = (m) => {
   if (sinceLast > 1) return null; // 이미 끊긴 스트릭은 "연속 중"이 아니다
   const isMax = m.currentStreak >= m.maxStreak;
   const sub = isMax
-    ? `${m.streakStart ?? ""}부터 매일 — 최장 기록을 경신하고 있어요`.trim()
-    : `${m.streakStart ?? ""}부터 매일 (최장 ${m.maxStreak}일)`.trim();
+    ? `*${m.streakStart ?? ""}*부터 매일 — 최장 기록을 경신하고 있어요`.trim()
+    : `*${m.streakStart ?? ""}*부터 매일 (최장 ${m.maxStreak}일)`.trim();
   return {
     id: "streak",
     icon: "🔥",
+    category: "연속 사용",
     headline: `${m.currentStreak}일 연속 사용 중`,
+    metric: { value: `${m.currentStreak}`, unit: "일" },
     sub,
     score: 50 + m.currentStreak * (isMax ? 4 : 2),
   };
@@ -144,12 +148,14 @@ const agentStyle: Rule = (m) => {
   const secPct = Math.max(1, Math.round((sec.tokens / total) * 100));
   const deeper = sec.avgMinutes >= dom.avgMinutes * 1.4 && sec.avgMinutes > 0;
   const sub = deeper
-    ? `${providerLabel(sec.provider)}는 ${secPct}%지만 세션당 평균 ${sec.avgMinutes}분으로 더 깊게 써요`
-    : `${providerLabel(sec.provider)} ${secPct}% · 세션당 평균 ${sec.avgMinutes}분`;
+    ? `${providerLabel(sec.provider)}는 ${secPct}%지만 세션당 평균 *${sec.avgMinutes}분*으로 더 깊게 써요`
+    : `${providerLabel(sec.provider)} ${secPct}% · 세션당 평균 *${sec.avgMinutes}분*`;
   return {
     id: "agent_style",
     icon: "🤖",
+    category: "에이전트 성향",
     headline: `${providerLabel(dom.provider)} ${domPct}%`,
+    metric: { value: providerLabel(dom.provider), unit: `${domPct}%` },
     sub,
     score: 25 + (deeper ? 15 : 0),
   };
@@ -162,11 +168,13 @@ const peakRecord: Rule = (m) => {
     m.lastActiveDate && daysBetween(m.peakDay.date, koreaToday()) <= 7;
   return {
     id: "peak_record",
-    icon: "🏆",
+    icon: "📈",
+    category: "최고 기록일",
     headline: `하루 최고 ${formatTokenAmount(m.peakDay.tokens)}`,
+    metric: { value: formatTokenAmount(m.peakDay.tokens) },
     sub: recent
-      ? `${m.peakDay.date} — 최근 신기록을 세웠어요`
-      : `${m.peakDay.date}에 기록한 역대 최고 사용량`,
+      ? `*${m.peakDay.date}* — 최근 신기록을 세웠어요`
+      : `*${m.peakDay.date}*에 기록한 역대 최고 사용량`,
     score: recent ? 45 : 20,
   };
 };
@@ -179,8 +187,9 @@ const nightOwl: Rule = (m) => {
   return {
     id: "night_owl",
     icon: "🦉",
+    category: "야행성",
     headline: "야행성 코더",
-    sub: `세션의 ${Math.round(ratio * 100)}%를 밤 10시 이후에 시작했어요`,
+    sub: `세션의 *${Math.round(ratio * 100)}%*를 밤 10시 이후에 시작했어요`,
     score: 22 + ratio * 20,
   };
 };
@@ -194,10 +203,13 @@ const milestone: Rule = (m) => {
       ? Math.max(1, daysBetween(t.firstDay, t.lastDay))
       : null;
   const spanText = span ? `${Math.round(span / 30)}개월간 ` : "";
+  const amount = `${formatTokenAmount(t.tokens)} 토큰`;
   return {
     id: "milestone",
-    icon: "🧮",
-    headline: `${spanText}누적 ${formatTokenAmount(t.tokens)} 토큰`,
+    icon: "🏆",
+    category: "누적 기록",
+    headline: `${spanText}누적 ${amount}을 흘려보냈어요`,
+    highlight: amount,
     sub: `${t.sessions.toLocaleString("ko-KR")} 세션 · ${t.turns.toLocaleString("ko-KR")} 프롬프트 · ${t.llmCalls.toLocaleString("ko-KR")} LLM 호출`,
     score: 5,
   };

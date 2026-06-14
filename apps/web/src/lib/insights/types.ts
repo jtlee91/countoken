@@ -42,8 +42,11 @@ export type InsightChart =
 export type Insight = {
   id: string;
   icon: string;
-  headline: string;
-  sub: string;
+  category: string; // 아이콘 옆 분류 라벨 (예: "연속 사용")
+  headline: string; // metric이 없을 때 보여줄 문장형 헤드라인
+  metric?: { value: string; unit?: string; accent?: boolean }; // 큰 수치 강조형
+  highlight?: string; // headline 중 초록으로 강조할 부분 문자열
+  sub: string; // *별표*로 감싼 부분은 굵게 렌더된다
   score: number; // 게이트 통과 후 노출 우선순위
   chart?: InsightChart;
 };

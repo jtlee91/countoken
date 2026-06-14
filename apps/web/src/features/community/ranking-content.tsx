@@ -215,7 +215,7 @@ export function RankingContent({
           <h1 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">
             Global weekly
           </h1>
-          <div className="mt-2.5 flex gap-4 text-[11px] font-bold text-muted">
+          <div className="mt-2.5 flex justify-end gap-4 text-[11px] font-bold text-muted">
             <span className="flex items-center gap-1.5">
               <span
                 className="size-2 rounded-full"

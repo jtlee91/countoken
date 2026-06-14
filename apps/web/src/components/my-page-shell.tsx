@@ -5,6 +5,7 @@ import type { ViewerProfile } from "@/lib/data/models";
 
 const tabs = [
   { href: "/me/dashboard", label: "대시보드", key: "dashboard" },
+  { href: "/me/insights", label: "인사이트", key: "insights" },
   { href: "/me/badges", label: "배지", key: "badges" },
   { href: "/me/settings", label: "설정", key: "settings" },
 ] as const;

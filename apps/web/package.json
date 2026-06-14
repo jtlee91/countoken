@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run test:privacy && npm run test:data",
     "test:privacy": "node --test --experimental-strip-types src/lib/privacy/usage-payload.test.ts src/lib/ingest/credential-hashing.test.ts",
-    "test:data": "node --test --experimental-strip-types src/lib/data/usage-session-aggregates.test.ts src/lib/format/tokens.test.ts"
+    "test:data": "node --test --experimental-strip-types src/lib/data/usage-session-aggregates.test.ts src/lib/format/tokens.test.ts src/lib/insights/rules.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

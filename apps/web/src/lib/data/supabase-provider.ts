@@ -17,6 +17,10 @@ import {
 } from "@/lib/data/usage-session-aggregates";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { formatTokenAmount } from "@/lib/format/tokens";
+import {
+  emptyInsightMetrics,
+  type InsightMetrics,
+} from "@/lib/insights/types";
 import { createClient } from "@/lib/supabase/server";
 
 type BadgeRow = {
@@ -195,6 +199,43 @@ export async function grantEligibleBadgesForViewer() {
 
   const supabase = await createClient();
   await supabase.rpc("grant_eligible_badges");
+}
+
+function toNumberArray(value: unknown, length: number): number[] {
+  const arr = Array.isArray(value) ? value : [];
+  return Array.from({ length }, (_, i) => Number(arr[i] ?? 0) || 0);
+}
+
+// get_user_insights RPC(JSON)를 룰 엔진 입력 형태로 매핑한다
+export async function getViewerInsightMetrics(): Promise<InsightMetrics> {
+  if (!hasPublicSupabaseEnv()) {
+    return emptyInsightMetrics();
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_user_insights");
+  if (error || !data || typeof data !== "object") {
+    return emptyInsightMetrics();
+  }
+
+  const raw = data as Record<string, unknown>;
+  const base = emptyInsightMetrics();
+  if (!raw.totals) {
+    return base;
+  }
+
+  return {
+    dowTokens: toNumberArray(raw.dowTokens, 7),
+    hourTokens: toNumberArray(raw.hourTokens, 24),
+    currentStreak: Number(raw.currentStreak ?? 0) || 0,
+    maxStreak: Number(raw.maxStreak ?? 0) || 0,
+    streakStart: (raw.streakStart as string | null) ?? null,
+    lastActiveDate: (raw.lastActiveDate as string | null) ?? null,
+    providers: (raw.providers as InsightMetrics["providers"]) ?? [],
+    devices: (raw.devices as InsightMetrics["devices"]) ?? [],
+    peakDay: (raw.peakDay as InsightMetrics["peakDay"]) ?? null,
+    totals: raw.totals as InsightMetrics["totals"],
+  };
 }
 
 export const supabaseDataProvider: TokenPlaneDataProvider = {

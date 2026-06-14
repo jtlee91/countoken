@@ -46,7 +46,11 @@ export function UsageCompositionCell({
         {formatTokenAmount(totalTokens)}
       </span>
       <div className="-my-[5px] min-w-0 flex-1 py-[5px]">
-        <div className="flex h-3.5 overflow-hidden rounded-full bg-surface-alt">
+        <div
+          className={`flex h-3.5 overflow-hidden rounded-full bg-surface-alt ${
+            cursor ? "ring-2 ring-token-green/45" : ""
+          }`}
+        >
           {segments.map((segment) => (
             <span
               key={segment.label}

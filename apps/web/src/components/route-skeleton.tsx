@@ -36,11 +36,11 @@ function HeaderSkeleton({ authed }: { authed: boolean }) {
           <SkeletonBlock className="size-9 rounded-xl md:size-[52px]" />
           <SkeletonBlock className="hidden h-6 w-[104px] md:block" />
         </div>
-        <div className="flex min-w-0 justify-center gap-2 p-0.5">
-          <SkeletonBlock className="h-10 w-[60px] md:w-[62px]" />
-          <SkeletonBlock className="h-10 w-[60px] md:w-[62px]" />
+        <div className="flex min-w-0 justify-center gap-1 p-0.5 md:gap-2">
+          <SkeletonBlock className="h-10 w-[44px] md:w-[62px]" />
+          <SkeletonBlock className="h-10 w-[44px] md:w-[62px]" />
           {authed ? (
-            <SkeletonBlock className="h-10 w-[96px] md:w-[103px]" />
+            <SkeletonBlock className="h-10 w-[83px] md:w-[103px]" />
           ) : null}
         </div>
         <div className="flex items-center justify-end gap-2">

@@ -54,7 +54,7 @@ export function SiteShell({
             aria-label="주요 화면"
             className="flex min-w-0 justify-center"
           >
-            <div className="flex gap-2 overflow-x-auto p-0.5">
+            <div className="flex gap-1 overflow-x-auto p-0.5 md:gap-2">
               {navItems.map((item) => {
                 const active = activePath === item.match;
 
@@ -65,8 +65,8 @@ export function SiteShell({
                     aria-current={active ? "page" : undefined}
                     className={
                       active
-                        ? "inline-flex min-h-10 shrink-0 items-center rounded-md border border-token-green/30 bg-token-green/10 px-3.5 py-2 text-[15px] font-extrabold text-foreground shadow-[inset_0_-2px_0_var(--token-green)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue md:px-4 md:text-base"
-                        : "inline-flex min-h-10 shrink-0 items-center rounded-md border border-transparent px-3.5 py-2 text-[15px] font-extrabold text-muted hover:border-border hover:bg-surface-alt hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue md:px-4 md:text-base"
+                        ? "inline-flex min-h-10 shrink-0 items-center rounded-md border border-token-green/30 bg-token-green/10 px-2 py-2 text-[15px] font-extrabold text-foreground shadow-[inset_0_-2px_0_var(--token-green)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue md:px-4 md:text-base"
+                        : "inline-flex min-h-10 shrink-0 items-center rounded-md border border-transparent px-2 py-2 text-[15px] font-extrabold text-muted hover:border-border hover:bg-surface-alt hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue md:px-4 md:text-base"
                     }
                   >
                     {item.label}

@@ -10,6 +10,15 @@ import {
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
 
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function koreaWeekday(dateKey: string) {
+  // dateKey is a KST calendar date (YYYY-MM-DD); read it as UTC so the
+  // weekday matches that exact day regardless of the viewer's timezone.
+  const day = new Date(`${dateKey}T00:00:00Z`).getUTCDay();
+  return WEEKDAYS[day];
+}
+
 const AREA_WIDTH = 700;
 const AREA_HEIGHT = 150;
 const AREA_TOP = 12;
@@ -121,7 +130,12 @@ export function DailyFlowChart({ days }: { days: DashboardDailyUsage[] }) {
                   isToday ? "text-token-green" : ""
                 }`}
               >
-                {day.label}
+                {day.label}{" "}
+                <span
+                  className={`font-extrabold ${isToday ? "" : "text-muted"}`}
+                >
+                  ({koreaWeekday(day.date)})
+                </span>
               </p>
               <p className="mt-0.5 truncate font-mono text-[10px] font-extrabold text-muted">
                 {formatTokenAmount(day.totalTokens)}
@@ -133,7 +147,15 @@ export function DailyFlowChart({ days }: { days: DashboardDailyUsage[] }) {
       {cursor && hoverDay ? (
         <UsageBreakdownTooltip
           cursor={cursor}
-          title={`${hoverDay.label} (KST)`}
+          title={
+            <>
+              {hoverDay.label}{" "}
+              <span className="text-white/75">
+                ({koreaWeekday(hoverDay.date)})
+              </span>{" "}
+              · KST
+            </>
+          }
           inputTokens={hoverDay.inputTokens}
           cacheTokens={hoverDay.cacheTokens}
           outputTokens={hoverDay.outputTokens}

@@ -32,7 +32,7 @@ export function UsageBreakdownTooltip({
   footer,
 }: {
   cursor: TooltipCursor;
-  title?: string;
+  title?: React.ReactNode;
   inputTokens: number;
   cacheTokens: number;
   outputTokens: number;

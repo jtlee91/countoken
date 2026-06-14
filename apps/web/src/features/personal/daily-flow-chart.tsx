@@ -43,25 +43,44 @@ function buildAreaGeometry(values: number[]) {
   const area = `${line} L${AREA_WIDTH},${AREA_HEIGHT} L0,${AREA_HEIGHT} Z`;
   const last = points[points.length - 1];
 
-  return { line, area, last };
+  return { line, area, last, points };
 }
 
 export function DailyFlowChart({ days }: { days: DashboardDailyUsage[] }) {
   const { cursor, handleMove, handleLeave } = useTooltipCursor();
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const { line, area, last } = buildAreaGeometry(
+  const { line, area, last, points } = buildAreaGeometry(
     days.map((day) => day.totalTokens),
   );
   const hoverDay = hoverIndex !== null ? days[hoverIndex] : null;
+  const hoverPoint = hoverIndex !== null ? points[hoverIndex] : null;
+
+  // 곡선 영역 어디서나 마우스를 움직이면 가장 가까운 날짜로 스냅한다
+  const handlePlotMove = (event: React.MouseEvent) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const ratio = (event.clientX - rect.left) / rect.width;
+    const index = Math.min(
+      days.length - 1,
+      Math.max(0, Math.round(ratio * Math.max(days.length - 1, 1))),
+    );
+    setHoverIndex(index);
+    handleMove(event);
+  };
+
+  const resetHover = () => {
+    setHoverIndex(null);
+    handleLeave();
+  };
 
   return (
-    <div onMouseLeave={() => setHoverIndex(null)}>
+    <div onMouseLeave={resetHover}>
       <div className="relative px-6 pb-1.5">
         <svg
           viewBox={`0 0 ${AREA_WIDTH} ${AREA_HEIGHT}`}
           preserveAspectRatio="none"
-          className="block h-[150px] w-full"
+          className="block h-[150px] w-full cursor-crosshair"
           aria-hidden
+          onMouseMove={handlePlotMove}
         >
           <defs>
             <linearGradient id="daily-flow-fill" x1="0" y1="0" x2="0" y2="1">
@@ -103,6 +122,25 @@ export function DailyFlowChart({ days }: { days: DashboardDailyUsage[] }) {
             opacity="0.2"
           />
           <circle cx={last.x} cy={last.y} r="5" fill="var(--token-green)" />
+          {hoverPoint ? (
+            <>
+              <circle
+                cx={hoverPoint.x}
+                cy={hoverPoint.y}
+                r="9"
+                fill="var(--token-green)"
+                opacity="0.2"
+              />
+              <circle
+                cx={hoverPoint.x}
+                cy={hoverPoint.y}
+                r="5"
+                fill="var(--token-green)"
+                stroke="var(--surface)"
+                strokeWidth="2"
+              />
+            </>
+          ) : null}
         </svg>
       </div>
       <div

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { hasSupabaseSessionCookie } from "@/lib/auth/has-session-cookie";
+
 function SkeletonBlock({ className }: { className: string }) {
   return (
     <div
@@ -24,8 +26,9 @@ function Card({
 
 // SiteShell 헤더와 같은 3열 그리드(로고 / 중앙 탭 / 우측 프로필)를 유지해
 // 로드 완료 시 요소가 점프하지 않도록 한다.
-// myPage=true(=/me/* 로딩)면 로그인 상태이므로 "마이페이지" 탭까지 표시한다.
-function HeaderSkeleton({ myPage = false }: { myPage?: boolean }) {
+// authed=true면 로그인 상태이므로 "마이페이지" 탭 + 프로필/로그아웃을,
+// false면 로그인 버튼을 그려 실제 헤더와 동일한 형태를 만든다.
+function HeaderSkeleton({ authed }: { authed: boolean }) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
       <div className="mx-auto grid min-h-14 w-full max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-2 px-3 py-2 sm:px-6 md:min-h-[72px] md:gap-3 md:py-3 lg:px-8">
@@ -36,14 +39,20 @@ function HeaderSkeleton({ myPage = false }: { myPage?: boolean }) {
         <div className="flex min-w-0 justify-center gap-2 p-0.5">
           <SkeletonBlock className="h-10 w-[64px] md:w-[68px]" />
           <SkeletonBlock className="h-10 w-[64px] md:w-[68px]" />
-          {myPage ? (
+          {authed ? (
             <SkeletonBlock className="h-10 w-[88px] md:w-[104px]" />
           ) : null}
         </div>
         <div className="flex items-center justify-end gap-2">
           <SkeletonBlock className="size-9 rounded-md md:h-10 md:w-[92px]" />
-          <SkeletonBlock className="size-9 rounded-full md:h-10 md:w-[132px] md:rounded-md" />
-          <SkeletonBlock className="hidden h-10 w-11 md:block" />
+          {authed ? (
+            <>
+              <SkeletonBlock className="size-9 rounded-full md:h-10 md:w-[132px] md:rounded-md" />
+              <SkeletonBlock className="hidden h-10 w-11 md:block" />
+            </>
+          ) : (
+            <SkeletonBlock className="h-10 w-[72px] md:w-[92px]" />
+          )}
         </div>
       </div>
     </header>
@@ -309,16 +318,18 @@ const variants = {
   ),
 } as const;
 
-export function RouteSkeleton({
+export async function RouteSkeleton({
   variant = "settings",
 }: {
   variant?: keyof typeof variants;
 }) {
   const Content = variants[variant];
+  // /me/* 로딩은 항상 로그인 상태. 그 외(랭킹·설치·공유)는 세션 쿠키로 추정한다.
+  const authed = variant.startsWith("me-") || (await hasSupabaseSessionCookie());
 
   return (
     <div className="min-h-screen text-foreground">
-      <HeaderSkeleton myPage={variant.startsWith("me-")} />
+      <HeaderSkeleton authed={authed} />
       <main
         className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8"
         aria-busy="true"

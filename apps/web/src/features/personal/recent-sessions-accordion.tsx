@@ -110,34 +110,38 @@ export function RecentSessionsAccordion({
             </button>
             {open ? (
               <div className="mb-3 rounded-lg border border-border bg-background p-3">
-                <button
-                  type="button"
-                  aria-expanded={barOpen}
-                  onClick={() => setBarOpen((value) => !value)}
-                  className={`flex h-2.5 w-full overflow-hidden rounded-full ${
-                    barOpen ? "ring-2 ring-token-green/45" : ""
-                  }`}
-                >
-                  {compositionSegments(session).map((segment) => (
-                    <span
-                      key={segment.className}
-                      className={`${segment.className} h-full`}
-                      style={{ width: `${segment.width}%` }}
-                    />
-                  ))}
-                </button>
-                {barOpen ? (
-                  <div className="mt-2.5">
-                    <UsageBreakdownPopover
-                      inputTokens={session.inputTokens}
-                      cacheTokens={session.cacheTokens}
-                      outputTokens={session.outputTokens}
-                      footer={`프롬프트 ${session.userTurnCount.toLocaleString(
-                        "ko-KR",
-                      )} · 호출 ${session.llmCallCount.toLocaleString("ko-KR")}`}
-                    />
-                  </div>
-                ) : null}
+                <div className="relative">
+                  <button
+                    type="button"
+                    aria-expanded={barOpen}
+                    onClick={() => setBarOpen((value) => !value)}
+                    className={`flex h-2.5 w-full overflow-hidden rounded-full ${
+                      barOpen ? "ring-2 ring-token-green/45" : ""
+                    }`}
+                  >
+                    {compositionSegments(session).map((segment) => (
+                      <span
+                        key={segment.className}
+                        className={`${segment.className} h-full`}
+                        style={{ width: `${segment.width}%` }}
+                      />
+                    ))}
+                  </button>
+                  {barOpen ? (
+                    <div className="absolute left-0 top-full z-20 mt-2.5 w-[280px] max-w-full">
+                      <UsageBreakdownPopover
+                        inputTokens={session.inputTokens}
+                        cacheTokens={session.cacheTokens}
+                        outputTokens={session.outputTokens}
+                        footer={`프롬프트 ${session.userTurnCount.toLocaleString(
+                          "ko-KR",
+                        )} · 호출 ${session.llmCallCount.toLocaleString(
+                          "ko-KR",
+                        )}`}
+                      />
+                    </div>
+                  ) : null}
+                </div>
                 <dl className="mt-2.5 space-y-1.5 text-xs font-bold text-muted">
                   <div className="flex items-center justify-between gap-3">
                     <dt>세션 시간</dt>

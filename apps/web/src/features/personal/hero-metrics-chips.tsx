@@ -76,23 +76,40 @@ export function HeroMetricsChips({ metrics }: { metrics: HeroMetricChip[] }) {
       <div className="mt-3">
         <p className="flex flex-wrap items-baseline gap-x-2.5">
           {canBreakdown ? (
-            <button
-              type="button"
-              aria-expanded={breakdownOpen}
-              onClick={() => setBreakdownOpen((open) => !open)}
-              className={`-mx-1.5 -my-0.5 flex items-baseline gap-1 rounded-lg px-1.5 py-0.5 font-mono text-[34px] font-black leading-tight ${
-                breakdownOpen ? "bg-surface-alt" : ""
-              }`}
-            >
-              {active.value}
-              <ChevronDown
-                size={16}
-                className={`self-center text-muted transition-transform ${
-                  breakdownOpen ? "rotate-180" : ""
+            <span className="relative">
+              <button
+                type="button"
+                aria-expanded={breakdownOpen}
+                onClick={() => setBreakdownOpen((open) => !open)}
+                className={`-mx-1.5 -my-0.5 flex items-baseline gap-1 rounded-lg px-1.5 py-0.5 font-mono text-[34px] font-black leading-tight ${
+                  breakdownOpen ? "bg-surface-alt" : ""
                 }`}
-                aria-hidden="true"
-              />
-            </button>
+              >
+                {active.value}
+                <ChevronDown
+                  size={16}
+                  className={`self-center text-muted transition-transform ${
+                    breakdownOpen ? "rotate-180" : ""
+                  }`}
+                  aria-hidden="true"
+                />
+              </button>
+              {breakdownOpen ? (
+                <div className="absolute left-0 top-full z-20 mt-2 w-[280px] max-w-[80vw]">
+                  <UsageBreakdownPopover
+                    periodLabel={active.label}
+                    agents={{
+                      codexTokens: active.breakdown.codexTokens,
+                      claudeTokens: active.breakdown.claudeTokens,
+                    }}
+                    inputTokens={active.breakdown.inputTokens}
+                    cacheTokens={active.breakdown.cacheTokens}
+                    outputTokens={active.breakdown.outputTokens}
+                    footer={breakdownFooter}
+                  />
+                </div>
+              ) : null}
+            </span>
           ) : (
             <span className="font-mono text-[34px] font-black leading-tight">
               {active.value}
@@ -111,21 +128,6 @@ export function HeroMetricsChips({ metrics }: { metrics: HeroMetricChip[] }) {
             </span>
           ) : null}
         </p>
-        {canBreakdown && breakdownOpen ? (
-          <div className="mt-2.5 w-full max-w-[280px]">
-            <UsageBreakdownPopover
-              periodLabel={active.label}
-              agents={{
-                codexTokens: active.breakdown.codexTokens,
-                claudeTokens: active.breakdown.claudeTokens,
-              }}
-              inputTokens={active.breakdown.inputTokens}
-              cacheTokens={active.breakdown.cacheTokens}
-              outputTokens={active.breakdown.outputTokens}
-              footer={breakdownFooter}
-            />
-          </div>
-        ) : null}
         {countItems.length > 0 ? (
           <div className="mt-2 grid grid-cols-3 gap-2">
             {countItems.map((item) => (

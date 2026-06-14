@@ -1,9 +1,12 @@
 import "server-only";
 
 import {
+  getViewerInsightMetrics,
   grantEligibleBadgesForViewer,
   supabaseDataProvider,
 } from "@/lib/data/supabase-provider";
+import { selectInsights } from "@/lib/insights/rules";
+import type { Insight } from "@/lib/insights/types";
 import type { RankingPageData } from "@/lib/data/types";
 import { getDataProviderMode, hasPublicSupabaseEnv } from "@/lib/env";
 import {
@@ -96,6 +99,21 @@ export async function getDashboardData(
     return await supabaseDataProvider.getDashboardData(viewer);
   } catch {
     return emptyDashboardData;
+  }
+}
+
+export async function getInsights(
+  viewer: ViewerProfile,
+): Promise<Insight[]> {
+  if (!viewer.userId || !shouldUseSupabaseProvider()) {
+    return [];
+  }
+
+  try {
+    const metrics = await getViewerInsightMetrics();
+    return selectInsights(metrics);
+  } catch {
+    return [];
   }
 }
 

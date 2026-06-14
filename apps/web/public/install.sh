@@ -32,6 +32,30 @@ esac
 
 mkdir -p "$BIN_DIR" "$HOOKS_DIR"
 
+# ----- migrate from the legacy ~/.mylocalagenttoken layout -----
+OLD_STATE_DIR="${HOME}/.mylocalagenttoken"
+if [ -d "$OLD_STATE_DIR" ] && [ "$OLD_STATE_DIR" != "$STATE_DIR" ]; then
+  log "migrating legacy state from ${OLD_STATE_DIR}"
+  mkdir -p "$STATE_DIR"
+
+  # carry over login + local history if the new dir doesn't have them yet
+  for f in auth.json usage.sqlite; do
+    if [ -f "${OLD_STATE_DIR}/${f}" ] && [ ! -f "${STATE_DIR}/${f}" ]; then
+      cp -p "${OLD_STATE_DIR}/${f}" "${STATE_DIR}/${f}"
+    fi
+  done
+
+  # repoint any existing hook registrations from the old path to the new one
+  for cfg in "${HOME}/.claude/settings.json" "${HOME}/.codex/config.toml"; do
+    if [ -f "$cfg" ] && grep -qF "$OLD_STATE_DIR" "$cfg"; then
+      tmp="${cfg}.tokenplane.tmp"
+      sed "s#${OLD_STATE_DIR}#${STATE_DIR}#g" "$cfg" > "$tmp" && mv "$tmp" "$cfg"
+    fi
+  done
+
+  rm -rf "$OLD_STATE_DIR"
+fi
+
 URL="https://github.com/${REPO}/releases/latest/download/token-agent-${OS}-${ARCH}"
 log "downloading token-agent (${OS}-${ARCH})"
 curl -fsSL -o "${BIN}.tmp" "$URL"

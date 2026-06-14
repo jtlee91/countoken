@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   formatTokenAmount,
   formatTokenSharePercent,
@@ -29,6 +29,22 @@ export function CompositionChart({
 }) {
   const [active, setActive] = useState<string | null>(null);
   const [pinned, setPinned] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // 고정 상태에서 차트 바깥(아무 곳)을 누르면 전체로 복귀
+  useEffect(() => {
+    if (!pinned) {
+      return;
+    }
+    const onOutside = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setPinned(false);
+        setActive(null);
+      }
+    };
+    document.addEventListener("pointerdown", onOutside);
+    return () => document.removeEventListener("pointerdown", onOutside);
+  }, [pinned]);
 
   const arcs = items.map((item) => ({
     ...item,
@@ -50,19 +66,14 @@ export function CompositionChart({
       setActive(null);
     }
   };
-  // 탭(모바일) / 클릭 고정 — 같은 항목을 다시 누르면 전체로 복귀
-  const toggle = (label: string) => {
-    if (pinned && active === label) {
-      setPinned(false);
-      setActive(null);
-    } else {
-      setPinned(true);
-      setActive(label);
-    }
+  // 조각/범례를 누르면 해당 항목을 고정 — 바깥을 누르면 전체로 복귀
+  const select = (label: string) => {
+    setPinned(true);
+    setActive(label);
   };
 
   return (
-    <div className="flex items-center gap-6">
+    <div ref={containerRef} className="flex items-center gap-6">
       <div className="relative shrink-0">
         <svg width="140" height="140" viewBox="0 0 140 140">
           <circle
@@ -91,7 +102,7 @@ export function CompositionChart({
                 style={{ opacity: active && !on ? 0.3 : 1 }}
                 onMouseEnter={() => hoverOn(arc.label)}
                 onMouseLeave={hoverOff}
-                onClick={() => toggle(arc.label)}
+                onClick={() => select(arc.label)}
               />
             );
           })}
@@ -131,7 +142,7 @@ export function CompositionChart({
               type="button"
               onMouseEnter={() => hoverOn(item.label)}
               onMouseLeave={hoverOff}
-              onClick={() => toggle(item.label)}
+              onClick={() => select(item.label)}
               className="-mx-2 cursor-pointer rounded-lg px-2 py-1 text-left transition-opacity"
               style={{ opacity: dimmed ? 0.4 : 1 }}
             >

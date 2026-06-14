@@ -32,7 +32,11 @@ export function AgentUsageBar({
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}
     >
-      <div className="h-2 overflow-hidden rounded-full bg-surface-alt">
+      <div
+        className={`h-2 overflow-hidden rounded-full bg-surface-alt ${
+          cursor ? "ring-2 ring-token-green/45" : ""
+        }`}
+      >
         <div
           className="flex h-full overflow-hidden rounded-full"
           style={{ width: `${Math.max(sharePercent, 1)}%` }}

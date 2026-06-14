@@ -9,6 +9,7 @@ import {
   tokenSharePercent,
 } from "@/lib/format/tokens";
 import { AgentUsageBar } from "./agent-usage-bar";
+import { CompositionChart } from "./composition-chart";
 import { DailyFlowChart } from "./daily-flow-chart";
 import { HeroMetricsChips } from "./hero-metrics-chips";
 import { RecentSessionsAccordion } from "./recent-sessions-accordion";
@@ -109,63 +110,6 @@ function SessionTimeCell({
             {formatDateTime(endedAt)}
           </span>
         </div>
-      </div>
-    </div>
-  );
-}
-
-const DONUT_RADIUS = 56;
-const DONUT_CIRCUMFERENCE = 2 * Math.PI * DONUT_RADIUS;
-
-function CompositionDonut({
-  segments,
-  totalLabel,
-}: {
-  segments: { label: string; value: number; stroke: string }[];
-  totalLabel: string;
-}) {
-  const total = segments.reduce((sum, segment) => sum + segment.value, 0);
-  const arcs = segments.map((segment) => ({
-    ...segment,
-    length: total > 0 ? (segment.value / total) * DONUT_CIRCUMFERENCE : 0,
-  }));
-  const offsets = arcs.map((_, index) =>
-    arcs.slice(0, index).reduce((sum, arc) => sum + arc.length, 0),
-  );
-
-  return (
-    <div className="relative shrink-0">
-      <svg width="140" height="140" viewBox="0 0 140 140">
-        <circle
-          cx="70"
-          cy="70"
-          r={DONUT_RADIUS}
-          fill="none"
-          stroke="var(--surface-alt)"
-          strokeWidth="18"
-        />
-        {arcs.map((arc, index) => (
-          <circle
-            key={arc.label}
-            cx="70"
-            cy="70"
-            r={DONUT_RADIUS}
-            fill="none"
-            stroke={arc.stroke}
-            strokeWidth="18"
-            strokeDasharray={`${arc.length} ${DONUT_CIRCUMFERENCE}`}
-            strokeDashoffset={-offsets[index]}
-            transform="rotate(-90 70 70)"
-          />
-        ))}
-      </svg>
-      <div className="absolute inset-0 grid place-content-center text-center">
-        <span className="font-mono text-[22px] font-black leading-none">
-          {totalLabel}
-        </span>
-        <span className="mt-1 text-[10px] font-extrabold tracking-[0.08em] text-muted">
-          TOTAL
-        </span>
       </div>
     </div>
   );
@@ -576,40 +520,11 @@ export function DashboardContent({
             <h2 className="text-lg font-black">토큰 구성</h2>
           </div>
           {dashboard.tokenBreakdown.total > 0 ? (
-            <div className="flex items-center gap-6">
-              <CompositionDonut
-                segments={breakdownItems.map((item) => ({
-                  label: item.label,
-                  value: item.value,
-                  stroke: item.stroke,
-                }))}
-                totalLabel={formatTokenAmount(dashboard.tokenBreakdown.total)}
-              />
-              <div className="grid flex-1 gap-3">
-                {breakdownItems.map((item) => (
-                  <div key={item.label}>
-                    <div className="grid grid-cols-[10px_1fr_auto] items-center gap-2.5">
-                      <span
-                        className={`h-2.5 w-2.5 rounded-[3px] ${item.dotClass}`}
-                      />
-                      <span className="text-[13px] font-extrabold">
-                        {item.label}
-                      </span>
-                      <span className="font-mono text-[13px] font-black">
-                        {formatTokenSharePercent(
-                          item.value,
-                          dashboard.tokenBreakdown.total,
-                        )}
-                        %
-                      </span>
-                    </div>
-                    <p className="ml-[22px] font-mono text-[11px] font-bold text-muted">
-                      {formatTokenAmount(item.value)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <CompositionChart
+              items={breakdownItems}
+              total={dashboard.tokenBreakdown.total}
+              totalLabel={formatTokenAmount(dashboard.tokenBreakdown.total)}
+            />
           ) : (
             <p className="rounded-md border border-dashed border-border bg-background p-4 text-sm font-bold leading-6 text-muted">
               아직 토큰 breakdown 데이터가 없습니다.

@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 import type { DashboardSession } from "@/lib/data/models";
 import { formatTokenAmount } from "@/lib/format/tokens";
+import { UsageBreakdownPopover } from "./usage-breakdown-popover";
 
 const timeFormatter = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "Asia/Seoul",
@@ -65,6 +66,7 @@ export function RecentSessionsAccordion({
   sessions: DashboardSession[];
 }) {
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const [barOpen, setBarOpen] = useState(false);
 
   return (
     <div className="sm:hidden">
@@ -76,7 +78,10 @@ export function RecentSessionsAccordion({
           <div key={key} className="border-b border-border last:border-b-0">
             <button
               type="button"
-              onClick={() => setOpenKey(open ? null : key)}
+              onClick={() => {
+                setOpenKey(open ? null : key);
+                setBarOpen(false);
+              }}
               aria-expanded={open}
               className="flex min-h-12 w-full items-center gap-2 py-3 text-left"
             >
@@ -105,7 +110,14 @@ export function RecentSessionsAccordion({
             </button>
             {open ? (
               <div className="mb-3 rounded-lg border border-border bg-background p-3">
-                <div className="flex h-1.5 overflow-hidden rounded-full">
+                <button
+                  type="button"
+                  aria-expanded={barOpen}
+                  onClick={() => setBarOpen((value) => !value)}
+                  className={`flex h-2.5 w-full overflow-hidden rounded-full ${
+                    barOpen ? "ring-2 ring-token-green/45" : ""
+                  }`}
+                >
                   {compositionSegments(session).map((segment) => (
                     <span
                       key={segment.className}
@@ -113,7 +125,19 @@ export function RecentSessionsAccordion({
                       style={{ width: `${segment.width}%` }}
                     />
                   ))}
-                </div>
+                </button>
+                {barOpen ? (
+                  <div className="mt-2.5">
+                    <UsageBreakdownPopover
+                      inputTokens={session.inputTokens}
+                      cacheTokens={session.cacheTokens}
+                      outputTokens={session.outputTokens}
+                      footer={`프롬프트 ${session.userTurnCount.toLocaleString(
+                        "ko-KR",
+                      )} · 호출 ${session.llmCallCount.toLocaleString("ko-KR")}`}
+                    />
+                  </div>
+                ) : null}
                 <dl className="mt-2.5 space-y-1.5 text-xs font-bold text-muted">
                   <div className="flex items-center justify-between gap-3">
                     <dt>세션 시간</dt>

@@ -461,6 +461,7 @@ export function DashboardContent({
                   llmCalls: formatCount(metric.counts.llmCalls),
                 }
               : null,
+            breakdown: metric.breakdown,
           }))}
         />
 

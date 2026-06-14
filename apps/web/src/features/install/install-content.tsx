@@ -4,14 +4,14 @@ import { CopyPromptButton } from "@/features/install/copy-prompt-button";
 import { ExpandablePrompt } from "@/features/install/expandable-prompt";
 import { getSiteUrl } from "@/lib/env";
 
-const BIN_PATH = "~/.mylocalagenttoken/bin/token-agent";
+const BIN_PATH = "~/.countoken/bin/token-agent";
 
 function buildInstallPrompt(siteUrl: string) {
   return `Install the Token Plane local token usage tracker on this machine. Follow these steps in order.
 
 1. Run the install script:
    curl -fsSL ${siteUrl}/install.sh | bash
-   This installs the token-agent binary and hook script under ~/.mylocalagenttoken, and registers a Stop hook for Claude Code (~/.claude/settings.json) and Codex (~/.codex/config.toml). Existing settings are preserved via merge, and re-running is idempotent.
+   This installs the token-agent binary and hook script under ~/.countoken, and registers a Stop hook for Claude Code (~/.claude/settings.json) and Codex (~/.codex/config.toml). Existing settings are preserved via merge, and re-running is idempotent.
 
 2. Log in (run with a command timeout of at least 6 minutes):
    ${BIN_PATH} login
@@ -24,7 +24,7 @@ function buildInstallPrompt(siteUrl: string) {
 4. Open the dashboard:
    Open ${siteUrl}/ in the browser (e.g. \`open ${siteUrl}/\` on macOS or \`xdg-open ${siteUrl}/\` on Linux) so I can see my synced token usage right away.
 
-Important: never print or store the contents of ~/.mylocalagenttoken/auth.json, access tokens, or any other secret values.`;
+Important: never print or store the contents of ~/.countoken/auth.json, access tokens, or any other secret values.`;
 }
 
 const steps = [
@@ -47,7 +47,7 @@ const steps = [
 
 const privacyPoints = [
   "프롬프트·응답 원문, 프로젝트 경로 등은 수집하지 않습니다. 토큰 수와 세션 메타데이터만 동기화됩니다.",
-  "세션 단위 상세 데이터는 로컬 SQLite(~/.mylocalagenttoken)에만 저장됩니다.",
+  "세션 단위 상세 데이터는 로컬 SQLite(~/.countoken)에만 저장됩니다.",
   "설치 시 기존 에이전트 설정은 그대로 유지되며, 동기화에 필요한 hook 한가지가 추가됩니다.",
 ];
 

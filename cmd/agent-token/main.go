@@ -531,9 +531,9 @@ func defaultClaudeProjectsDir() string {
 func defaultStateDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return ".mylocalagenttoken"
+		return ".countoken"
 	}
-	return filepath.Join(home, ".mylocalagenttoken")
+	return filepath.Join(home, ".countoken")
 }
 
 func statJSONL(path string) (fileMetadata, error) {

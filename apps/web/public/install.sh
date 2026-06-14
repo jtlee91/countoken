@@ -4,7 +4,7 @@
 set -euo pipefail
 
 REPO="jtlee91/agent-token-plane"
-STATE_DIR="${HOME}/.mylocalagenttoken"
+STATE_DIR="${HOME}/.countoken"
 BIN_DIR="${STATE_DIR}/bin"
 HOOKS_DIR="${STATE_DIR}/hooks"
 BIN="${BIN_DIR}/token-agent"
@@ -43,7 +43,7 @@ log "installing hook script"
 cat > "$HOOK_SCRIPT" <<'HOOK_EOF'
 #!/usr/bin/env bash
 set -u
-STATE_DIR="${HOME}/.mylocalagenttoken"
+STATE_DIR="${HOME}/.countoken"
 BIN="${STATE_DIR}/bin/token-agent"
 LOG="${STATE_DIR}/hooks.log"
 

@@ -44,10 +44,10 @@ function HeaderSkeleton({ authed }: { authed: boolean }) {
           ) : null}
         </div>
         <div className="flex items-center justify-end gap-2">
-          <SkeletonBlock className="size-9 rounded-md md:h-10 md:w-[105px]" />
+          <SkeletonBlock className="size-9 rounded-md md:h-10 md:w-[103px]" />
           {authed ? (
             <>
-              <SkeletonBlock className="size-9 rounded-full md:h-10 md:w-[137px] md:rounded-md" />
+              <SkeletonBlock className="size-9 rounded-full md:h-10 md:w-[134px] md:rounded-md" />
               <SkeletonBlock className="hidden h-10 w-10 md:block" />
             </>
           ) : (

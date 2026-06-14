@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SafeUsageEvent } from "@/lib/privacy/usage-payload";
 
 const BADGE_GRANT_RULES = {
-  tokenBurnerDailyTokens: 10000,
+  tokenBurnerDailyTokens: 200000000,
   multiAgentCount: 2,
   nightOwlStartHour: 22,
   nightOwlEndHour: 5,

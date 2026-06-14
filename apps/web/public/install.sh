@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Token Plane local agent installer.
+# Countoken local agent installer.
 # Usage: curl -fsSL https://<site>/install.sh | bash
 set -euo pipefail
 

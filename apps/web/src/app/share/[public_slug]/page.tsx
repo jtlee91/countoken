@@ -13,14 +13,14 @@ export async function generateMetadata({
   const card = await getShareCard(publicSlug);
 
   if (!card) {
-    return { title: "Token Plane" };
+    return { title: "Countoken" };
   }
 
   return {
-    title: `${card.displayName}의 주간 토큰 리포트 | Token Plane`,
+    title: `${card.displayName}의 주간 토큰 리포트 | Countoken`,
     description: card.rankPosition
       ? `이번 주 글로벌 ${card.rankPosition}위 · ${card.scoreLabel ?? ""} tokens`
-      : "Token Plane 주간 사용량 공유 카드",
+      : "Countoken 주간 사용량 공유 카드",
   };
 }
 

@@ -4,7 +4,7 @@ import { getShareCard } from "@/lib/data";
 
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-export const alt = "Token Plane 주간 사용량 공유 카드";
+export const alt = "Countoken 주간 사용량 공유 카드";
 
 export default async function OpengraphImage({
   params,
@@ -33,10 +33,10 @@ export default async function OpengraphImage({
       >
         <div style={{ display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", fontSize: 34, fontWeight: 800, color: "#7ee2a8" }}>
-            Token Plane · Global Weekly
+            Countoken · Global Weekly
           </div>
           <div style={{ display: "flex", marginTop: 28, fontSize: 76, fontWeight: 900 }}>
-            {card?.displayName ?? "Token Plane"}
+            {card?.displayName ?? "Countoken"}
           </div>
         </div>
 

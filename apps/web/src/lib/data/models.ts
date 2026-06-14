@@ -149,6 +149,6 @@ export type ShareCard = {
   periodLabel: string;
   rankPosition: number | null;
   scoreLabel: string | null;
-  serviceName: "Token Plane";
+  serviceName: "Countoken";
   badges: BadgeDefinition[];
 };

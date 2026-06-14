@@ -37,8 +37,8 @@ export function SiteShell({
               height={52}
               className="size-9 shrink-0 rounded-xl object-cover md:size-[52px]"
             />
-            <span className="hidden truncate text-xl font-black md:inline">
-              Token Plane
+            <span className="hidden truncate text-xl font-black uppercase tracking-tight md:inline">
+              Countoken
             </span>
           </Link>
 

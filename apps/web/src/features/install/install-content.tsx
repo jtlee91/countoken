@@ -7,7 +7,7 @@ import { getSiteUrl } from "@/lib/env";
 const BIN_PATH = "~/.countoken/bin/token-agent";
 
 function buildInstallPrompt(siteUrl: string) {
-  return `Install the Token Plane local token usage tracker on this machine. Follow these steps in order.
+  return `Install the Countoken local token usage tracker on this machine. Follow these steps in order.
 
 1. Run the install script:
    curl -fsSL ${siteUrl}/install.sh | bash

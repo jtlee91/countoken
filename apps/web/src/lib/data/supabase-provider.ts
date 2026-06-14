@@ -549,7 +549,7 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
       rankPosition: row.rank_position,
       scoreLabel:
         row.total_tokens === null ? null : formatTokenAmount(row.total_tokens),
-      serviceName: "Token Plane",
+      serviceName: "Countoken",
       badges: shareBadges,
     };
 

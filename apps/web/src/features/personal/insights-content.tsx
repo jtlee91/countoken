@@ -78,11 +78,9 @@ function InsightChartView({ chart }: { chart: InsightChart }) {
   return <HoursChart data={chart.data} peak={chart.peak} />;
 }
 
-// 차트가 있으면 넓게(3칸), 누적 기록은 풀폭, 나머지는 2칸
+// 누적 기록은 풀폭, 나머지는 반폭
 function cardSpan(insight: Insight) {
-  if (insight.id === "milestone") return "lg:col-span-6";
-  if (insight.chart) return "lg:col-span-3";
-  return "lg:col-span-2";
+  return insight.id === "milestone" ? "lg:col-span-2" : "";
 }
 
 export function InsightsContent({
@@ -105,11 +103,11 @@ export function InsightsContent({
       </p>
 
       {insights.length > 0 ? (
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="mt-6 grid grid-cols-1 gap-3 lg:grid-cols-2">
           {insights.map((insight) => (
             <article
               key={insight.id}
-              className={`col-span-1 rounded-lg border border-border bg-background p-4 sm:col-span-2 ${cardSpan(
+              className={`rounded-lg border border-border bg-background p-4 ${cardSpan(
                 insight,
               )}`}
             >

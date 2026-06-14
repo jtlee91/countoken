@@ -187,8 +187,8 @@ export function RankingContent({
   const viewerHelperLabel =
     viewerRanking?.topTenGapLabel ??
     (viewerWeeklyUsage
-      ? "랭킹은 아직 집계 전이며, 개인 주간 사용량만 표시됩니다."
-      : "실제 사용량 집계 후 개인 랭킹 정보가 표시됩니다.");
+      ? "랭킹은 곧 시작돼요. 지금은 내 이번 주 사용량을 보여드릴게요."
+      : "사용량이 쌓이면 내 순위도 여기에 나타나요.");
 
   // 바로 윗 순위와의 토큰 차이 (1위이거나 데이터가 없으면 표시하지 않음)
   const viewerRank = viewerRanking?.rankPosition ?? null;
@@ -310,11 +310,10 @@ export function RankingContent({
         ) : (
           <div className="rounded-lg border border-dashed border-border bg-background p-6">
             <p className="text-lg font-black">
-              아직 공개 랭킹 데이터가 없습니다.
+              이번 주 랭킹을 준비하고 있어요
             </p>
             <p className="mt-2 text-sm font-bold leading-6 text-muted">
-              실제 사용량 업로드와 랭킹 집계가 들어오면 이 영역에 공개 opt-in
-              사용자만 표시됩니다.
+              곧 공개를 선택한 분들의 주간 순위가 여기에 나타나요.
             </p>
           </div>
         )}

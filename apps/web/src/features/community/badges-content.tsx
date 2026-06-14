@@ -93,7 +93,7 @@ export function BadgesContent({
             마이페이지 · 배지
           </p>
           <h1 className="mt-2 text-xl font-black tracking-normal sm:text-[28px]">
-            {viewer.displayName}님의 배지 컬렉션
+            {viewer.displayName} 님의 배지 컬렉션
           </h1>
           <p className="mt-3 hidden max-w-2xl text-base font-semibold leading-7 text-muted sm:block">
             에이전트 사용 패턴에 따라 자동으로 획득되는 배지입니다. 새 배지는 동기화

@@ -23,8 +23,9 @@ function Card({
 }
 
 // SiteShell 헤더와 같은 3열 그리드(로고 / 중앙 탭 / 우측 프로필)를 유지해
-// 로드 완료 시 요소가 점프하지 않도록 한다
-function HeaderSkeleton() {
+// 로드 완료 시 요소가 점프하지 않도록 한다.
+// myPage=true(=/me/* 로딩)면 로그인 상태이므로 "마이페이지" 탭까지 표시한다.
+function HeaderSkeleton({ myPage = false }: { myPage?: boolean }) {
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
       <div className="mx-auto grid min-h-14 w-full max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-2 px-3 py-2 sm:px-6 md:min-h-[72px] md:gap-3 md:py-3 lg:px-8">
@@ -35,8 +36,12 @@ function HeaderSkeleton() {
         <div className="flex min-w-0 justify-center gap-2 p-0.5">
           <SkeletonBlock className="h-10 w-[64px] md:w-[68px]" />
           <SkeletonBlock className="h-10 w-[64px] md:w-[68px]" />
+          {myPage ? (
+            <SkeletonBlock className="h-10 w-[88px] md:w-[104px]" />
+          ) : null}
         </div>
         <div className="flex items-center justify-end gap-2">
+          <SkeletonBlock className="size-9 rounded-md md:h-10 md:w-[92px]" />
           <SkeletonBlock className="size-9 rounded-full md:h-10 md:w-[132px] md:rounded-md" />
           <SkeletonBlock className="hidden h-10 w-11 md:block" />
         </div>
@@ -313,7 +318,7 @@ export function RouteSkeleton({
 
   return (
     <div className="min-h-screen text-foreground">
-      <HeaderSkeleton />
+      <HeaderSkeleton myPage={variant.startsWith("me-")} />
       <main
         className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8"
         aria-busy="true"

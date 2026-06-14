@@ -12,7 +12,7 @@ const pretendard = localFont({
 
 const siteUrl = getSiteUrl();
 const siteDescription =
-  "Claude Code와 Codex 사용량을 안전하게 모아 보는 Countoken";
+  "AI 코딩 에이전트 사용량을 안전하게 모아 보는 Countoken";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

@@ -34,24 +34,24 @@ function HeaderSkeleton({ authed }: { authed: boolean }) {
       <div className="mx-auto grid min-h-14 w-full max-w-7xl grid-cols-[auto_1fr_auto] items-center gap-2 px-3 py-2 sm:px-6 md:min-h-[72px] md:gap-3 md:py-3 lg:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <SkeletonBlock className="size-9 rounded-xl md:size-[52px]" />
-          <SkeletonBlock className="hidden h-6 w-28 md:block" />
+          <SkeletonBlock className="hidden h-6 w-[104px] md:block" />
         </div>
         <div className="flex min-w-0 justify-center gap-2 p-0.5">
-          <SkeletonBlock className="h-10 w-[64px] md:w-[68px]" />
-          <SkeletonBlock className="h-10 w-[64px] md:w-[68px]" />
+          <SkeletonBlock className="h-10 w-[60px] md:w-[62px]" />
+          <SkeletonBlock className="h-10 w-[60px] md:w-[62px]" />
           {authed ? (
-            <SkeletonBlock className="h-10 w-[88px] md:w-[104px]" />
+            <SkeletonBlock className="h-10 w-[96px] md:w-[103px]" />
           ) : null}
         </div>
         <div className="flex items-center justify-end gap-2">
-          <SkeletonBlock className="size-9 rounded-md md:h-10 md:w-[92px]" />
+          <SkeletonBlock className="size-9 rounded-md md:h-10 md:w-[105px]" />
           {authed ? (
             <>
-              <SkeletonBlock className="size-9 rounded-full md:h-10 md:w-[132px] md:rounded-md" />
-              <SkeletonBlock className="hidden h-10 w-11 md:block" />
+              <SkeletonBlock className="size-9 rounded-full md:h-10 md:w-[137px] md:rounded-md" />
+              <SkeletonBlock className="hidden h-10 w-10 md:block" />
             </>
           ) : (
-            <SkeletonBlock className="h-10 w-[72px] md:w-[92px]" />
+            <SkeletonBlock className="h-10 w-[56px] md:w-[80px]" />
           )}
         </div>
       </div>

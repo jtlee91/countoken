@@ -16,6 +16,26 @@ import { formatTokenAmount } from "@/lib/format/tokens";
 const CLAUDE_COLOR = "#d97757";
 const CODEX_COLOR = "#10a37f";
 
+const KOREA_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+// 현재 KST 기준 이번 주(월~일) 범위를 "6/8(월) ~ 6/14(일)" 형태로 반환한다.
+// epoch + 9h로 KST 벽시계를 UTC 필드로 읽어 월요일~일요일을 계산한다.
+function currentKoreaWeekRangeLabel(now: Date = new Date()): string {
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const daysSinceMonday = (kst.getUTCDay() + 6) % 7;
+  const monday = new Date(
+    Date.UTC(
+      kst.getUTCFullYear(),
+      kst.getUTCMonth(),
+      kst.getUTCDate() - daysSinceMonday,
+    ),
+  );
+  const sunday = new Date(monday.getTime() + 6 * 24 * 60 * 60 * 1000);
+  const fmt = (d: Date) =>
+    `${d.getUTCMonth() + 1}/${d.getUTCDate()}(${KOREA_WEEKDAYS[d.getUTCDay()]})`;
+  return `${fmt(monday)} ~ ${fmt(sunday)}`;
+}
+
 function providerPillBackground(claudeTokens: number, codexTokens: number) {
   const total = claudeTokens + codexTokens;
 
@@ -208,8 +228,18 @@ export function RankingContent({
         <div className="mb-5">
           <div className="flex items-center justify-between gap-4">
             <p className="text-sm font-extrabold text-token-green">랭킹</p>
-            <span className="inline-flex min-h-8 shrink-0 items-center rounded-full border border-badge-gold/30 bg-[#fff0c2] px-3 text-xs font-extrabold text-[#9a6400]">
+            <span
+              className="group relative inline-flex min-h-8 shrink-0 cursor-help items-center rounded-full border border-badge-gold/30 bg-[#fff0c2] px-3 text-xs font-extrabold text-[#9a6400] focus-visible:outline focus-visible:outline-2 focus-visible:outline-code-blue"
+              tabIndex={0}
+            >
               이번 주 Top 10
+              <span className="pointer-events-none absolute right-0 top-full z-10 mt-2 hidden whitespace-nowrap rounded-lg bg-foreground px-3.5 py-2.5 text-left text-xs font-bold leading-6 text-white shadow-[0_10px_26px_rgba(29,45,37,0.28)] group-hover:block group-focus-visible:block">
+                <span className="font-extrabold text-[#7ee2a8]">
+                  이번 주 집계 (KST)
+                </span>
+                <br />
+                {currentKoreaWeekRangeLabel()}
+              </span>
             </span>
           </div>
           <h1 className="mt-2 text-3xl font-black tracking-normal sm:text-4xl">

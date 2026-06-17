@@ -47,13 +47,33 @@ const steps = [
 
 const privacyPoints = [
   "프롬프트·응답 원문, 프로젝트 경로 등은 수집하지 않습니다. 토큰 수와 세션 메타데이터만 동기화됩니다.",
-  "세션 단위 상세 데이터는 로컬 SQLite(~/.countoken)에만 저장됩니다.",
   "설치 시 기존 에이전트 설정은 그대로 유지되며, 동기화에 필요한 hook 한가지가 추가됩니다.",
 ];
+
+const TERM_CARD_STYLE = {
+  background:
+    "radial-gradient(900px 300px at 85% -40%, rgba(74,222,128,0.10), transparent 60%), linear-gradient(180deg, #11140f, #0a0c09)",
+} as const;
+
+const TERM_HEAD_STYLE = {
+  background:
+    "linear-gradient(180deg, rgba(26,30,23,0.9), rgba(20,24,18,0.9))",
+} as const;
+
+function TermDots() {
+  return (
+    <div className="flex gap-2">
+      <span className="size-3 rounded-full bg-[#ff5f57]" />
+      <span className="size-3 rounded-full bg-[#febc2e]" />
+      <span className="size-3 rounded-full bg-[#28c840]" />
+    </div>
+  );
+}
 
 export function InstallContent() {
   const siteUrl = getSiteUrl().replace(/\/$/, "");
   const prompt = buildInstallPrompt(siteUrl);
+  const directCommand = `curl -fsSL ${siteUrl}/install.sh | bash && ${BIN_PATH} login`;
 
   return (
     <div className="space-y-6">
@@ -61,9 +81,9 @@ export function InstallContent() {
         <h1 className="text-3xl font-bold">
           프롬프트 한 번이면 설치 끝.
         </h1>
-        <p className="mt-3 max-w-4xl text-sm font-bold leading-6 text-muted">
-          코드 에이전트에게 설치를 맡기세요. 복사한 프롬프트를 붙여넣으면
-          에이전트가 설치하고, Google 로그인 한 번으로 연결이 완료됩니다.
+        <p className="mt-3 text-sm font-bold leading-6 text-muted">
+          복사한 프롬프트를 코드 에이전트에게 입력하면, 에이전트가 모든 설치
+          작업을 진행합니다!
         </p>
         <ol className="mt-7 grid gap-0">
           {steps.map((step, index) => (
@@ -82,7 +102,7 @@ export function InstallContent() {
               </span>
               <div>
                 <p className="pt-1 text-sm font-black">{step.title}</p>
-                <p className="mt-1.5 max-w-2xl text-xs font-bold leading-5 text-muted">
+                <p className="mt-1.5 text-xs font-bold leading-5 text-muted">
                   {step.description}
                 </p>
               </div>
@@ -91,20 +111,75 @@ export function InstallContent() {
         </ol>
       </section>
 
-      <section className="overflow-hidden rounded-lg border border-[#2a2f2b]">
-        <div className="flex items-center gap-1.5 bg-[#202420] px-4 py-2.5">
-          <span className="size-3 rounded-full bg-[#ff5f57]" />
-          <span className="size-3 rounded-full bg-[#febc2e]" />
-          <span className="size-3 rounded-full bg-[#28c840]" />
-          <span className="ml-2.5 text-xs font-bold text-[#9aa39c]">
+      <section
+        className="relative overflow-hidden rounded-2xl border border-[#2a2f26] shadow-[0_24px_60px_-28px_rgba(10,20,12,0.55)]"
+        style={TERM_CARD_STYLE}
+      >
+        <div
+          className="relative flex items-center gap-3.5 border-b border-[#2a2f26] px-4 py-3"
+          style={TERM_HEAD_STYLE}
+        >
+          <TermDots />
+          <span className="ml-1 font-mono text-[12.5px] font-bold text-[#7e887b]">
             install-prompt.txt
           </span>
           <div className="ml-auto">
-            <CopyPromptButton text={prompt} />
+            <CopyPromptButton text={prompt} label="프롬프트 복사" />
           </div>
         </div>
         <ExpandablePrompt text={prompt} />
       </section>
+
+      <div>
+        <div className="mb-2 flex items-center gap-2.5">
+          <span className="text-xl font-extrabold leading-none text-token-green">
+            ›
+          </span>
+          <h2 className="text-[22px] font-extrabold tracking-tight">
+            터미널에서 직접 설치
+          </h2>
+        </div>
+        <p className="mb-4 text-[13px] font-bold leading-relaxed text-muted">
+          바이너리와 hook을 설치하고 Google 로그인 한 번이면 끝.{" "}
+          <b className="text-foreground">macOS &amp; Linux</b> 지원, Windows는
+          준비 중.
+        </p>
+
+        <section
+          className="relative overflow-hidden rounded-2xl border border-[#2a2f26] shadow-[0_24px_60px_-28px_rgba(10,20,12,0.55)]"
+          style={TERM_CARD_STYLE}
+        >
+          <div
+            className="relative flex items-center gap-3.5 px-4 py-3"
+            style={TERM_HEAD_STYLE}
+          >
+            <TermDots />
+            <span className="ml-1 rounded-lg bg-[#4ade80] px-3 py-[5px] font-mono text-[13px] font-bold text-[#0a0c09]">
+              One-liner
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <div className="flex gap-0.5 rounded-[9px] border border-[#2a2f26] bg-black/25 p-[3px]">
+                <span className="rounded-md bg-token-green px-[11px] py-1 font-mono text-xs font-bold text-white">
+                  macOS &amp; Linux
+                </span>
+                <span className="rounded-md px-[11px] py-1 font-mono text-xs font-bold text-[#5c6a58]">
+                  Windows · TBD
+                </span>
+              </div>
+              <CopyPromptButton text={directCommand} label="명령 복사" />
+            </div>
+          </div>
+          <div className="relative flex items-start gap-2.5 px-[22px] py-[22px] font-mono text-sm leading-7">
+            <span className="font-bold text-[#4ade80]">$</span>
+            <span className="break-all text-[#d4ddd0]">
+              curl -fsSL{" "}
+              <span className="text-[#93e6b0]">{siteUrl}/install.sh</span>{" "}
+              <span className="text-[#7e887b]">|</span> bash{" "}
+              <span className="text-[#7e887b]">&amp;&amp;</span> {BIN_PATH} login
+            </span>
+          </div>
+        </section>
+      </div>
 
       <section className="rounded-lg border border-border bg-surface p-6">
         <div className="flex items-center gap-2">
@@ -122,12 +197,6 @@ export function InstallContent() {
             </li>
           ))}
         </ul>
-        <p className="mt-4 rounded-md border border-dashed border-border bg-background p-3 text-xs font-bold leading-5 text-muted">
-          터미널에서 직접 설치하려면:{" "}
-          <code className="font-mono">
-            curl -fsSL {siteUrl}/install.sh | bash && {BIN_PATH} login
-          </code>
-        </p>
       </section>
     </div>
   );

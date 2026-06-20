@@ -19,7 +19,12 @@ import (
 // parserVersion tracks the Claude/Codex token-parsing logic. Bump it whenever
 // that logic changes so existing local caches are dropped and re-parsed on the
 // next run, and the corrected sessions are re-uploaded.
-const parserVersion = 2
+//
+// v3: session summaries are aggregated from usage_calls across every source file
+// that shares a session_hash, so Claude's separate subagent files
+// (<session>/subagents/agent-*.jsonl, written with the parent's sessionId) are
+// rolled into the parent session instead of clobbering it.
+const parserVersion = 3
 
 type Store struct {
 	db *sql.DB
@@ -421,37 +426,6 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 	defer tx.Rollback()
 
 	if _, err := tx.ExecContext(ctx, `
-		insert into sessions (
-			session_hash,
-			provider,
-			started_at,
-			ended_at,
-			user_turn_count,
-			llm_call_count,
-			input_tokens,
-			output_tokens,
-			cache_tokens,
-			updated_at,
-			need_sync,
-			synced_at
-		) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, null)
-		on conflict(session_hash) do update set
-			provider = excluded.provider,
-			started_at = excluded.started_at,
-			ended_at = excluded.ended_at,
-			user_turn_count = excluded.user_turn_count,
-			llm_call_count = excluded.llm_call_count,
-			input_tokens = excluded.input_tokens,
-			output_tokens = excluded.output_tokens,
-			cache_tokens = excluded.cache_tokens,
-			updated_at = excluded.updated_at,
-			need_sync = 1,
-			synced_at = null
-	`, parsed.Summary.SessionHash, provider, parsed.Summary.StartedAt, parsed.Summary.EndedAt, parsed.Summary.UserTurnCount, parsed.Summary.LLMCallCount, parsed.Summary.Tokens.Input, parsed.Summary.Tokens.Output, parsed.Summary.Tokens.Cache, now); err != nil {
-		return err
-	}
-
-	if _, err := tx.ExecContext(ctx, `
 		delete from usage_calls
 		where provider = ? and source_file_key = ?
 	`, provider, fileKey); err != nil {
@@ -502,6 +476,65 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 			session_hash = excluded.session_hash,
 			last_parsed_at = excluded.last_parsed_at
 	`, fileKey, provider, sizeBytes, modifiedAt, parsed.Summary.SessionHash, now); err != nil {
+		return err
+	}
+
+	// Recompute the session summary by aggregating every usage_call mapped to this
+	// session_hash. Claude writes subagent turns to separate files
+	// (<session>/subagents/agent-*.jsonl) that carry the parent's sessionId, so two
+	// source files share one session_hash; deriving totals from usage_calls rolls
+	// them up instead of letting the last-parsed file clobber the summary, and keeps
+	// the session in lockstep with the usage_calls-based daily rollup. user_turn_count
+	// can't come from calls, so we keep the largest per-file human-prompt count (a
+	// subagent file contributes the same or fewer prompts than its parent).
+	if _, err := tx.ExecContext(ctx, `
+		insert into sessions (
+			session_hash,
+			provider,
+			started_at,
+			ended_at,
+			user_turn_count,
+			llm_call_count,
+			input_tokens,
+			output_tokens,
+			cache_tokens,
+			updated_at,
+			need_sync,
+			synced_at
+		)
+		select
+			?,
+			?,
+			coalesce(min(occurred_at), ?),
+			coalesce(max(occurred_at), ?),
+			?,
+			case when count(*) > 0 then count(*) else ? end,
+			case when count(*) > 0 then coalesce(sum(input_tokens), 0) else ? end,
+			case when count(*) > 0 then coalesce(sum(output_tokens), 0) else ? end,
+			case when count(*) > 0 then coalesce(sum(cache_tokens), 0) else ? end,
+			?,
+			1,
+			null
+		from usage_calls
+		where provider = ? and session_hash = ?
+		on conflict(session_hash) do update set
+			provider = excluded.provider,
+			started_at = excluded.started_at,
+			ended_at = excluded.ended_at,
+			user_turn_count = max(sessions.user_turn_count, excluded.user_turn_count),
+			llm_call_count = excluded.llm_call_count,
+			input_tokens = excluded.input_tokens,
+			output_tokens = excluded.output_tokens,
+			cache_tokens = excluded.cache_tokens,
+			updated_at = excluded.updated_at,
+			need_sync = 1,
+			synced_at = null
+	`, parsed.Summary.SessionHash, provider,
+		parsed.Summary.StartedAt, parsed.Summary.EndedAt,
+		parsed.Summary.UserTurnCount,
+		parsed.Summary.LLMCallCount,
+		parsed.Summary.Tokens.Input, parsed.Summary.Tokens.Output, parsed.Summary.Tokens.Cache,
+		now, provider, parsed.Summary.SessionHash); err != nil {
 		return err
 	}
 

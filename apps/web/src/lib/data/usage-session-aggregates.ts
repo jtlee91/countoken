@@ -519,7 +519,7 @@ function toSessionAgents(
   if (!rows || rows.length === 0) {
     return [];
   }
-  return rows
+  const agents: SessionAgent[] = rows
     .filter(
       // 토큰·호출이 모두 0인 에이전트는 노이즈(빈 스텁)라 숨긴다. 메인 턴은 항상 유지.
       (row) =>
@@ -541,14 +541,64 @@ function toSessionAgents(
       userTurnCount: row.user_turn_count,
       startedAt: row.started_at,
       endedAt: row.ended_at,
-    }))
-    .sort((a, b) => {
-      // 메인 턴을 맨 위로, 그다음 깊이·시작시각 순
-      if (a.agentKey === "main" && b.agentKey !== "main") return -1;
-      if (b.agentKey === "main" && a.agentKey !== "main") return 1;
-      if (a.depth !== b.depth) return a.depth - b.depth;
-      return (a.startedAt ?? "").localeCompare(b.startedAt ?? "");
-    });
+    }));
+
+  return orderAgentsAsTree(agents);
+}
+
+// 부모→자식이 바로 아래 오도록 DFS(pre-order)로 정렬해, 들여쓰기가 실제 중첩
+// 구조로 읽히게 한다. 부모를 찾을 수 없는 에이전트는 메인 턴 아래에 붙인다.
+function orderAgentsAsTree(agents: SessionAgent[]): SessionAgent[] {
+  if (agents.length === 0) {
+    return [];
+  }
+  const present = new Set(agents.map((agent) => agent.agentKey));
+  const childrenOf = new Map<string, SessionAgent[]>();
+  for (const agent of agents) {
+    if (agent.agentKey === "main") {
+      continue;
+    }
+    const parent =
+      agent.parentAgentKey && present.has(agent.parentAgentKey)
+        ? agent.parentAgentKey
+        : "main";
+    const list = childrenOf.get(parent) ?? [];
+    list.push(agent);
+    childrenOf.set(parent, list);
+  }
+  for (const list of childrenOf.values()) {
+    list.sort(
+      (a, b) =>
+        (a.startedAt ?? "").localeCompare(b.startedAt ?? "") ||
+        b.totalTokens - a.totalTokens,
+    );
+  }
+
+  const ordered: SessionAgent[] = [];
+  const seen = new Set<string>();
+  const visit = (key: string) => {
+    for (const child of childrenOf.get(key) ?? []) {
+      if (seen.has(child.agentKey)) {
+        continue;
+      }
+      seen.add(child.agentKey);
+      ordered.push(child);
+      visit(child.agentKey);
+    }
+  };
+
+  const main = agents.find((agent) => agent.agentKey === "main");
+  if (main) {
+    ordered.push(main);
+  }
+  visit("main");
+  // 트리에 닿지 않은 잔여(순환/고아)는 뒤에 그대로 붙인다.
+  for (const agent of agents) {
+    if (agent.agentKey !== "main" && !seen.has(agent.agentKey)) {
+      ordered.push(agent);
+    }
+  }
+  return ordered;
 }
 
 export function summarizeUsageSessions(

@@ -182,7 +182,7 @@ export function RecentSessionsAccordion({
                           key={agent.agentKey}
                           className="flex items-center gap-2 text-xs font-bold"
                           style={{
-                            paddingLeft: `${Math.min(agent.depth, 3) * 12}px`,
+                            paddingLeft: `${Math.min(agent.depth, 8) * 14}px`,
                           }}
                         >
                           <span

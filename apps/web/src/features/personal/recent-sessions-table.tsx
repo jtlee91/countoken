@@ -104,15 +104,15 @@ function PromptsCalls({
 }
 
 function AgentRow({ agent }: { agent: SessionAgent }) {
-  const indent = Math.min(agent.depth, 3);
+  const indent = Math.min(agent.depth, 8);
   return (
     <tr className="bg-code-blue/[0.035]">
       <td className="border-b border-border/70 px-3 py-2.5">
         <div
-          className="flex items-center gap-2 text-[13px] font-extrabold text-foreground/90"
-          style={{ paddingLeft: `${8 + indent * 16}px` }}
+          className="flex items-center gap-1.5 text-[13px] font-extrabold text-foreground/90"
+          style={{ paddingLeft: `${4 + indent * 18}px` }}
         >
-          <span className="-ml-3 shrink-0 text-border" aria-hidden="true">
+          <span className="shrink-0 text-border" aria-hidden="true">
             └
           </span>
           <span className="min-w-0 truncate" title={agent.labelText || undefined}>

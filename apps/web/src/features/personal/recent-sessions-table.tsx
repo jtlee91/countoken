@@ -199,26 +199,22 @@ export function RecentSessionsTable({
                     onClick={expandable ? toggle : undefined}
                   >
                     <span className="flex items-center gap-1.5 font-black">
-                      {expandable ? (
-                        open ? (
-                          <ChevronDown
-                            size={13}
-                            className="shrink-0 text-muted"
-                            aria-hidden="true"
-                          />
-                        ) : (
-                          <ChevronRight
-                            size={13}
-                            className="shrink-0 text-muted"
-                            aria-hidden="true"
-                          />
-                        )
-                      ) : null}
+                      <span
+                        aria-hidden="true"
+                        className="flex w-[13px] shrink-0 items-center justify-center text-muted"
+                      >
+                        {expandable ? (
+                          open ? (
+                            <ChevronDown size={13} />
+                          ) : (
+                            <ChevronRight size={13} />
+                          )
+                        ) : null}
+                      </span>
                       {session.providerLabel}
                     </span>
                     <span
-                      className="mt-[3px] block max-w-[12rem] truncate text-[11px] font-extrabold text-muted"
-                      style={{ paddingLeft: expandable ? "20px" : undefined }}
+                      className="mt-[3px] block max-w-[12rem] truncate pl-[19px] text-[11px] font-extrabold text-muted"
                       title={session.deviceLabel}
                     >
                       {session.deviceLabel}

@@ -32,7 +32,11 @@ import (
 // v5: Claude nesting — spawn labels are extracted from subagent files too (not
 // just the main file), and depth is reconstructed by walking the spawn chain so
 // nested subagents (a subagent spawning a subagent) indent correctly.
-const parserVersion = 5
+//
+// v6: a spawn is only recorded when a bare "agentId: …" string has a matching
+// Agent/Task tool_use, so agent ids echoed in shell output aren't mistaken for
+// real subagents (which created empty 0-token agent rows).
+const parserVersion = 6
 
 type Store struct {
 	db *sql.DB

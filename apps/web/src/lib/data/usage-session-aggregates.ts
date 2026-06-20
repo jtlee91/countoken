@@ -520,6 +520,13 @@ function toSessionAgents(
     return [];
   }
   return rows
+    .filter(
+      // 토큰·호출이 모두 0인 에이전트는 노이즈(빈 스텁)라 숨긴다. 메인 턴은 항상 유지.
+      (row) =>
+        row.agent_key === "main" ||
+        row.input_tokens + row.output_tokens + row.cache_tokens > 0 ||
+        row.llm_call_count > 0,
+    )
     .map((row) => ({
       agentKey: row.agent_key,
       parentAgentKey: row.parent_agent_key,

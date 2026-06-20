@@ -243,9 +243,14 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 	}
 	// Every file (main or subagent) may spawn children via Agent/Task calls. Emit
 	// each spawned child's label and its spawner (this file's agent) so nesting is
-	// reconstructed across files.
+	// reconstructed across files. Require a matching Agent/Task tool_use so a bare
+	// "agentId: …" string echoed in other command output (e.g. shell logs) isn't
+	// mistaken for a real spawn.
 	for toolUseID, agentID := range agentByToolUse {
-		input := taskByToolUse[toolUseID]
+		input, ok := taskByToolUse[toolUseID]
+		if !ok {
+			continue
+		}
 		result.AgentLabels = append(result.AgentLabels, usage.AgentLabel{
 			AgentKey:  agentID,
 			ParentKey: ownAgentKey,

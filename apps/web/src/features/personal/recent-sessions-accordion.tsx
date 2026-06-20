@@ -187,18 +187,17 @@ export function RecentSessionsAccordion({
                         >
                           <span
                             className="min-w-0 flex-1 truncate text-foreground"
-                            title={agent.labelText || undefined}
+                            title={
+                              agent.labelType
+                                ? `${agent.labelText || "서브에이전트"} · ${agent.labelType} · depth ${agent.depth}`
+                                : agent.labelText || undefined
+                            }
                           >
                             {agent.labelText ||
                               (agent.agentKey === "main"
                                 ? "메인 턴"
                                 : "서브에이전트")}
                           </span>
-                          {agent.labelType ? (
-                            <span className="shrink-0 rounded-[5px] bg-surface-alt px-1.5 py-px text-[10px] font-black text-muted">
-                              {agent.labelType}
-                            </span>
-                          ) : null}
                           <span className="shrink-0 font-mono font-black text-foreground">
                             {formatTokenAmount(agent.totalTokens)}
                           </span>

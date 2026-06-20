@@ -4,7 +4,10 @@ import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import type { DashboardSession, SessionAgent } from "@/lib/data/models";
+import { formatTokenAmount } from "@/lib/format/tokens";
 import { UsageCompositionCell } from "./usage-composition-cell";
+
+const tooltipNumberFormatter = new Intl.NumberFormat("ko-KR");
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
 
@@ -105,6 +108,18 @@ function PromptsCalls({
 
 function AgentRow({ agent }: { agent: SessionAgent }) {
   const indent = Math.min(agent.depth, 8);
+  const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
+  const isMain = agent.agentKey === "main";
+  const name = agent.labelText || (isMain ? "메인 턴" : "서브에이전트");
+  const safeTotal = Math.max(agent.totalTokens, 1);
+  const segments = [
+    { label: "입력", value: agent.inputTokens, color: "bg-code-blue" },
+    { label: "캐시", value: agent.cacheTokens, color: "bg-token-green" },
+    { label: "출력", value: agent.outputTokens, color: "bg-badge-gold" },
+  ];
+  const flipX =
+    cursor !== null && cursor.x + 14 + 260 > window.innerWidth;
+
   return (
     <tr className="bg-code-blue/[0.035]">
       <td className="border-b border-border/70 px-3 py-2.5">
@@ -115,15 +130,78 @@ function AgentRow({ agent }: { agent: SessionAgent }) {
           <span className="shrink-0 text-border" aria-hidden="true">
             └
           </span>
-          <span className="min-w-0 truncate" title={agent.labelText || undefined}>
-            {agent.labelText || (agent.agentKey === "main" ? "메인 턴" : "서브에이전트")}
+          <span
+            className={`min-w-0 truncate ${
+              isMain
+                ? ""
+                : "cursor-default border-b border-dotted border-muted/50"
+            }`}
+            onMouseMove={
+              isMain
+                ? undefined
+                : (event) =>
+                    setCursor({ x: event.clientX, y: event.clientY })
+            }
+            onMouseLeave={isMain ? undefined : () => setCursor(null)}
+          >
+            {name}
           </span>
-          {agent.labelType ? (
+          {isMain ? (
             <span className="shrink-0 rounded-[5px] bg-surface-alt px-1.5 py-px text-[10px] font-black text-muted">
-              {agent.labelType}
+              main
             </span>
           ) : null}
         </div>
+        {cursor ? (
+          <div
+            className="pointer-events-none fixed z-30 w-[260px] rounded-lg border border-border bg-foreground px-3.5 py-3 text-xs font-bold leading-6 text-white shadow-lg"
+            style={{
+              left: flipX ? cursor.x - 14 : cursor.x + 14,
+              top: cursor.y + 16,
+              transform: flipX ? "translateX(-100%)" : undefined,
+            }}
+          >
+            <div className="truncate text-[13px] font-black">{name}</div>
+            <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.04em] text-token-green/80">
+              {agent.labelType ? `${agent.labelType} · ` : ""}depth {agent.depth}
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-white/60">시간</span>
+              <span className="font-mono">
+                {formatHourMinute(agent.startedAt)} →{" "}
+                {formatHourMinute(agent.endedAt)}
+              </span>
+            </div>
+            <div className="flex justify-between gap-3">
+              <span className="text-white/60">프롬프트 · 호출</span>
+              <span className="font-mono">
+                {agent.userTurnCount} · {agent.llmCallCount}
+              </span>
+            </div>
+            <div className="my-2 border-t border-white/20" />
+            {segments.map((segment) => (
+              <div key={segment.label} className="flex justify-between gap-3">
+                <span>
+                  <span
+                    className={`mr-1.5 inline-block size-2 rounded-[3px] align-middle ${segment.color}`}
+                  />
+                  {segment.label}
+                </span>
+                <span className="font-mono">
+                  {formatTokenAmount(segment.value)} (
+                  {Math.round((segment.value / safeTotal) * 100)}%)
+                </span>
+              </div>
+            ))}
+            <div className="my-2 border-t border-white/20" />
+            <div className="flex justify-between gap-3">
+              <span className="text-white/60">전체</span>
+              <span className="font-mono">
+                {tooltipNumberFormatter.format(agent.totalTokens)} 토큰
+              </span>
+            </div>
+          </div>
+        ) : null}
       </td>
       <td className="whitespace-nowrap border-b border-border/70 px-3 py-2.5 font-mono text-[11px] font-extrabold text-muted">
         {formatHourMinute(agent.startedAt)} → {formatHourMinute(agent.endedAt)}

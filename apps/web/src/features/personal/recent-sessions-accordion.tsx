@@ -75,6 +75,7 @@ export function RecentSessionsAccordion({
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [barOpen, setBarOpen] = useState(false);
   const [openAgent, setOpenAgent] = useState<string | null>(null);
+  const [agentPlacement, setAgentPlacement] = useState<"up" | "down">("up");
 
   return (
     <div className="sm:hidden">
@@ -212,14 +213,22 @@ export function RecentSessionsAccordion({
                           },
                         ];
 
+                        const placeUp = !popOpen || agentPlacement === "up";
+
                         return (
                           <li
                             key={agent.agentKey}
-                            className="relative flex items-center gap-2 text-xs font-bold"
+                            className="relative flex items-center gap-1.5 text-xs font-bold"
                             style={{
                               paddingLeft: `${Math.min(agent.depth, 8) * 14}px`,
                             }}
                           >
+                            <span
+                              className="shrink-0 text-border"
+                              aria-hidden="true"
+                            >
+                              └
+                            </span>
                             {isMain ? (
                               <span className="min-w-0 flex-1 truncate text-foreground">
                                 {name}
@@ -227,9 +236,19 @@ export function RecentSessionsAccordion({
                             ) : (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setOpenAgent(popOpen ? null : agentId)
-                                }
+                                onClick={(event) => {
+                                  if (popOpen) {
+                                    setOpenAgent(null);
+                                    return;
+                                  }
+                                  // 위 공간이 부족하면 아래로 띄운다.
+                                  const rect =
+                                    event.currentTarget.getBoundingClientRect();
+                                  setAgentPlacement(
+                                    rect.top > 260 ? "up" : "down",
+                                  );
+                                  setOpenAgent(agentId);
+                                }}
                                 aria-expanded={popOpen}
                                 className={`min-w-0 flex-1 truncate text-left ${
                                   popOpen ? "text-code-blue" : "text-foreground"
@@ -250,7 +269,13 @@ export function RecentSessionsAccordion({
                                   onClick={() => setOpenAgent(null)}
                                   className="fixed inset-0 z-20 cursor-default"
                                 />
-                                <div className="absolute bottom-full left-1/2 z-30 mb-2.5 w-[268px] max-w-[calc(100vw-3rem)] -translate-x-1/2 rounded-xl border border-black/20 bg-foreground px-4 py-3 leading-6 text-white shadow-2xl">
+                                <div
+                                  className={`absolute left-1/2 z-30 w-[268px] max-w-[calc(100vw-3rem)] -translate-x-1/2 rounded-xl border border-black/20 bg-foreground px-4 py-3 leading-6 text-white shadow-2xl ${
+                                    placeUp
+                                      ? "bottom-full mb-2.5"
+                                      : "top-full mt-2.5"
+                                  }`}
+                                >
                                   <div className="truncate text-[13px] font-black">
                                     {name}
                                   </div>
@@ -304,7 +329,13 @@ export function RecentSessionsAccordion({
                                       토큰
                                     </span>
                                   </div>
-                                  <span className="absolute -bottom-1.5 left-1/2 size-3 -translate-x-1/2 rotate-45 border-b border-r border-black/20 bg-foreground" />
+                                  <span
+                                    className={`absolute left-1/2 size-3 -translate-x-1/2 rotate-45 bg-foreground ${
+                                      placeUp
+                                        ? "-bottom-1.5 border-b border-r border-black/20"
+                                        : "-top-1.5 border-l border-t border-black/20"
+                                    }`}
+                                  />
                                 </div>
                               </>
                             ) : null}

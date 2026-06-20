@@ -150,32 +150,32 @@ export function InstallContent() {
           style={TERM_CARD_STYLE}
         >
           <div
-            className="relative flex items-center gap-3.5 px-4 py-3"
+            className="relative flex items-center gap-3.5 border-b border-[#2a2f26] px-4 py-3"
             style={TERM_HEAD_STYLE}
           >
             <TermDots />
-            <span className="ml-1 rounded-lg bg-[#4ade80] px-3 py-[5px] font-mono text-[13px] font-bold text-[#0a0c09]">
-              One-liner
+            <span className="ml-1 font-mono text-[12.5px] font-bold text-[#7e887b]">
+              install.sh
             </span>
-            <div className="ml-auto flex items-center gap-2">
-              <div className="flex gap-0.5 rounded-[9px] border border-[#2a2f26] bg-black/25 p-[3px]">
-                <span className="rounded-md bg-token-green px-[11px] py-1 font-mono text-xs font-bold text-white">
-                  macOS &amp; Linux
-                </span>
-                <span className="rounded-md px-[11px] py-1 font-mono text-xs font-bold text-[#5c6a58]">
-                  Windows · TBD
-                </span>
-              </div>
+            <div className="ml-auto">
               <CopyPromptButton text={directCommand} label="명령 복사" />
             </div>
           </div>
           <div className="relative flex items-start gap-2.5 px-[22px] py-[22px] font-mono text-sm leading-7">
-            <span className="font-bold text-[#4ade80]">$</span>
-            <span className="break-all text-[#d4ddd0]">
+            <span className="select-none font-bold text-[#4ade80]">$</span>
+            <span className="break-words [word-break:keep-all] text-[#d4ddd0]">
               curl -fsSL{" "}
               <span className="text-[#93e6b0]">{siteUrl}/install.sh</span>{" "}
               <span className="text-[#7e887b]">|</span> bash{" "}
               <span className="text-[#7e887b]">&amp;&amp;</span> {BIN_PATH} login
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 border-t border-[#2a2f26] bg-black/15 px-4 py-2.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4ade80]/35 px-2.5 py-1 font-mono text-[11px] font-bold text-[#d4ddd0]">
+              <span className="text-token-green">●</span> macOS &amp; Linux
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#2a2f26] px-2.5 py-1 font-mono text-[11px] font-bold text-[#5c6a58]">
+              Windows · 준비 중
             </span>
           </div>
         </section>

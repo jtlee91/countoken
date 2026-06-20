@@ -72,15 +72,32 @@ function formatLastSyncRelative(value: string | null) {
   return `${formatDateTime(value)} 동기화`;
 }
 
+// 베이스라인이 바닥일 때 퍼센트가 폭주(예: 어제 42.6K 대비 ▲433008%)하거나 0으로
+// 나눌 수 없는 문제를 막기 위해 증가율은 999%에서 상한 처리한다.
+const DELTA_CAP_PERCENT = 999;
+
+function formatDeltaMagnitude(percent: number) {
+  const magnitude = Math.abs(percent);
+  return magnitude > DELTA_CAP_PERCENT ? `${DELTA_CAP_PERCENT}%+` : `${magnitude}%`;
+}
+
 function periodDelta(current: number, previous: number, vsLabel: string) {
   if (previous <= 0) {
-    return null;
+    // 0으로는 나눌 수 없다. 직전이 0인데 늘었으면 상한값으로, 변화가 없으면 생략.
+    if (current <= 0) {
+      return null;
+    }
+    return {
+      up: true,
+      label: `▲ ${DELTA_CAP_PERCENT}%+`,
+      title: `vs ${vsLabel}`,
+    };
   }
 
   const percent = Math.round(((current - previous) / previous) * 100);
   return {
     up: percent >= 0,
-    label: `${percent >= 0 ? "▲" : "▼"} ${Math.abs(percent)}%`,
+    label: `${percent >= 0 ? "▲" : "▼"} ${formatDeltaMagnitude(percent)}`,
     title: `vs ${vsLabel}`,
   };
 }

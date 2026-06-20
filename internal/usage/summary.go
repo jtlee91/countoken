@@ -38,10 +38,13 @@ type AgentMeta struct {
 	LabelText    string // codex agent_nickname / claude description / "메인 턴"
 }
 
-// AgentLabel maps a child agent_key to its display label, sourced from a parent
-// file that spawned it (Claude main file's Task calls).
+// AgentLabel maps a child agent_key to its display label and the agent that
+// spawned it, sourced from the spawner's file (Claude Agent/Task calls). A child
+// can be spawned from the main file or from another subagent file (nesting), so
+// ParentKey carries the spawner's agent_key.
 type AgentLabel struct {
 	AgentKey  string
+	ParentKey string
 	LabelType string
 	LabelText string
 }

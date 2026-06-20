@@ -514,6 +514,10 @@ func inspectProvider(provider string, root string, stateDir string, parseSession
 	if err := store.ResolveSessionRoots(ctx, provider); err != nil {
 		return inspectResult{}, err
 	}
+	// Reconstruct Claude subagent nesting depth from the spawn chain.
+	if err := store.ResolveAgentDepths(ctx, provider); err != nil {
+		return inspectResult{}, err
+	}
 	result.SessionsFound = len(result.Sessions)
 	return result, nil
 }

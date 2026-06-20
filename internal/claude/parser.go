@@ -220,18 +220,18 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 		Calls:        calls,
 		OwnSessionID: rawSessionID,
 	}
+	ownAgentKey := "main"
 	if strings.Contains(filepath.ToSlash(path), "/subagents/") || fileAgentID != "" {
-		// Subagent file: its own agent row. Label is filled later from the
-		// parent (main) file's Task map, keyed by the same agentId.
-		agentKey := fileAgentID
-		if agentKey == "" {
-			agentKey = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		// Subagent file: its own agent row carries tokens only. Its parent, depth
+		// and label come from the spawner's file (which may be the main file or
+		// another subagent for nesting), reconciled in the store + a depth pass.
+		ownAgentKey = fileAgentID
+		if ownAgentKey == "" {
+			ownAgentKey = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 		}
 		result.Agent = usage.AgentMeta{
-			AgentKey:     agentKey,
-			ParentKey:    "main",
+			AgentKey:     ownAgentKey,
 			ThreadSource: "subagent",
-			Depth:        1,
 		}
 	} else {
 		result.Agent = usage.AgentMeta{
@@ -240,14 +240,18 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 			LabelType:    "main",
 			LabelText:    "메인 턴",
 		}
-		for toolUseID, agentID := range agentByToolUse {
-			input := taskByToolUse[toolUseID]
-			result.AgentLabels = append(result.AgentLabels, usage.AgentLabel{
-				AgentKey:  agentID,
-				LabelType: strings.TrimSpace(input.SubagentType),
-				LabelText: strings.TrimSpace(input.Description),
-			})
-		}
+	}
+	// Every file (main or subagent) may spawn children via Agent/Task calls. Emit
+	// each spawned child's label and its spawner (this file's agent) so nesting is
+	// reconstructed across files.
+	for toolUseID, agentID := range agentByToolUse {
+		input := taskByToolUse[toolUseID]
+		result.AgentLabels = append(result.AgentLabels, usage.AgentLabel{
+			AgentKey:  agentID,
+			ParentKey: ownAgentKey,
+			LabelType: strings.TrimSpace(input.SubagentType),
+			LabelText: strings.TrimSpace(input.Description),
+		})
 	}
 	return result, nil
 }

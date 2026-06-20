@@ -28,7 +28,11 @@ import (
 // v4: subagent breakdown — per-file agent rows (session_agents) plus Codex root
 // resolution that rolls subagent threads (separate session ids) onto their
 // parent session_hash.
-const parserVersion = 4
+//
+// v5: Claude nesting — spawn labels are extracted from subagent files too (not
+// just the main file), and depth is reconstructed by walking the spawn chain so
+// nested subagents (a subagent spawning a subagent) indent correctly.
+const parserVersion = 5
 
 type Store struct {
 	db *sql.DB
@@ -648,8 +652,8 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 			from usage_calls
 			where provider = ? and source_file_key = ?
 			on conflict(provider, session_hash, agent_key) do update set
-				parent_agent_key = excluded.parent_agent_key,
-				depth = excluded.depth,
+				parent_agent_key = case when excluded.parent_agent_key != '' then excluded.parent_agent_key else session_agents.parent_agent_key end,
+				depth = case when excluded.depth != 0 then excluded.depth else session_agents.depth end,
 				label_type = case when excluded.label_type != '' then excluded.label_type else session_agents.label_type end,
 				label_text = case when excluded.label_text != '' then excluded.label_text else session_agents.label_text end,
 				input_tokens = excluded.input_tokens,
@@ -674,19 +678,24 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 	// file's Agent/Task calls → agentId). Insert a label-only stub if the
 	// subagent's own row hasn't been parsed yet; never overwrite tokens.
 	for _, label := range parsed.AgentLabels {
-		if label.AgentKey == "" || (label.LabelType == "" && label.LabelText == "") {
+		if label.AgentKey == "" {
 			continue
+		}
+		parentKey := label.ParentKey
+		if parentKey == "" {
+			parentKey = "main"
 		}
 		if _, err := tx.ExecContext(ctx, `
 			insert into session_agents (
 				provider, session_hash, agent_key, parent_agent_key, depth,
 				label_type, label_text, updated_at
-			) values (?, ?, ?, 'main', 1, ?, ?, ?)
+			) values (?, ?, ?, ?, 0, ?, ?, ?)
 			on conflict(provider, session_hash, agent_key) do update set
+				parent_agent_key = case when excluded.parent_agent_key != '' then excluded.parent_agent_key else session_agents.parent_agent_key end,
 				label_type = case when excluded.label_type != '' then excluded.label_type else session_agents.label_type end,
 				label_text = case when excluded.label_text != '' then excluded.label_text else session_agents.label_text end,
 				updated_at = excluded.updated_at
-		`, provider, parsed.Summary.SessionHash, label.AgentKey, label.LabelType, label.LabelText, now); err != nil {
+		`, provider, parsed.Summary.SessionHash, label.AgentKey, parentKey, label.LabelType, label.LabelText, now); err != nil {
 			return err
 		}
 	}
@@ -788,6 +797,89 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 		}
 	}
 	return tx.Commit()
+}
+
+// ResolveAgentDepths computes each agent's nesting depth from the spawn chain.
+// Claude doesn't record depth, so a subagent that spawns another subagent must be
+// reconstructed by walking parent_agent_key back to "main". Codex carries an
+// authoritative thread_spawn depth (and its root uses agent_key "main" while
+// children point at the parent thread id, so the chain wouldn't reach "main"), so
+// this only runs for Claude.
+func (store *Store) ResolveAgentDepths(ctx context.Context, provider string) error {
+	if provider != "claude" {
+		return nil
+	}
+	rows, err := store.db.QueryContext(ctx, `
+		select session_hash, agent_key, parent_agent_key
+		from session_agents
+		where provider = ?
+	`, provider)
+	if err != nil {
+		return err
+	}
+	type node struct{ session, key, parent string }
+	var nodes []node
+	parentsBySession := map[string]map[string]string{}
+	for rows.Next() {
+		var n node
+		if err := rows.Scan(&n.session, &n.key, &n.parent); err != nil {
+			rows.Close()
+			return err
+		}
+		nodes = append(nodes, n)
+		if parentsBySession[n.session] == nil {
+			parentsBySession[n.session] = map[string]string{}
+		}
+		parentsBySession[n.session][n.key] = n.parent
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(nodes) == 0 {
+		return nil
+	}
+
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, n := range nodes {
+		depth := computeAgentDepth(n.key, parentsBySession[n.session])
+		if _, err := tx.ExecContext(ctx, `
+			update session_agents set depth = ?
+			where provider = ? and session_hash = ? and agent_key = ?
+		`, depth, provider, n.session, n.key); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func computeAgentDepth(key string, parents map[string]string) int {
+	if key == "main" {
+		return 0
+	}
+	depth := 0
+	cur := key
+	seen := map[string]struct{}{}
+	for cur != "" && cur != "main" {
+		if _, ok := seen[cur]; ok {
+			break
+		}
+		seen[cur] = struct{}{}
+		parent, ok := parents[cur]
+		if !ok || parent == "" {
+			break
+		}
+		depth++
+		cur = parent
+	}
+	if depth == 0 {
+		depth = 1
+	}
+	return depth
 }
 
 // resolveRoot walks own→parent links to the topmost ancestor. If a parent id is

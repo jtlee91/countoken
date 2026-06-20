@@ -131,18 +131,11 @@ function AgentRow({ agent }: { agent: SessionAgent }) {
             └
           </span>
           <span
-            className={`min-w-0 truncate ${
-              isMain
-                ? ""
-                : "cursor-default border-b border-dotted border-muted/50"
-            }`}
-            onMouseMove={
-              isMain
-                ? undefined
-                : (event) =>
-                    setCursor({ x: event.clientX, y: event.clientY })
+            className="min-w-0 cursor-default truncate border-b border-dotted border-muted/50"
+            onMouseMove={(event) =>
+              setCursor({ x: event.clientX, y: event.clientY })
             }
-            onMouseLeave={isMain ? undefined : () => setCursor(null)}
+            onMouseLeave={() => setCursor(null)}
           >
             {name}
           </span>
@@ -161,10 +154,15 @@ function AgentRow({ agent }: { agent: SessionAgent }) {
               transform: flipX ? "translateX(-100%)" : undefined,
             }}
           >
-            <div className="truncate text-[13px] font-black">{name}</div>
-            <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.04em] text-token-green/80">
-              {agent.labelType ? `${agent.labelType} · ` : ""}depth {agent.depth}
+            <div className={`truncate text-[13px] font-black ${isMain ? "mb-2" : ""}`}>
+              {name}
             </div>
+            {isMain ? null : (
+              <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.04em] text-token-green/80">
+                {agent.labelType ? `${agent.labelType} · ` : ""}depth{" "}
+                {agent.depth}
+              </div>
+            )}
             <div className="flex justify-between gap-3">
               <span className="text-white/60">시간</span>
               <span className="font-mono">

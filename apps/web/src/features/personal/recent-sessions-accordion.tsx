@@ -229,34 +229,26 @@ export function RecentSessionsAccordion({
                             >
                               └
                             </span>
-                            {isMain ? (
-                              <span className="min-w-0 flex-1 truncate text-foreground">
-                                {name}
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  if (popOpen) {
-                                    setOpenAgent(null);
-                                    return;
-                                  }
-                                  // 위 공간이 부족하면 아래로 띄운다.
-                                  const rect =
-                                    event.currentTarget.getBoundingClientRect();
-                                  setAgentPlacement(
-                                    rect.top > 260 ? "up" : "down",
-                                  );
-                                  setOpenAgent(agentId);
-                                }}
-                                aria-expanded={popOpen}
-                                className={`min-w-0 flex-1 truncate text-left ${
-                                  popOpen ? "text-code-blue" : "text-foreground"
-                                }`}
-                              >
-                                {name}
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                if (popOpen) {
+                                  setOpenAgent(null);
+                                  return;
+                                }
+                                // 위 공간이 부족하면 아래로 띄운다.
+                                const rect =
+                                  event.currentTarget.getBoundingClientRect();
+                                setAgentPlacement(rect.top > 260 ? "up" : "down");
+                                setOpenAgent(agentId);
+                              }}
+                              aria-expanded={popOpen}
+                              className={`min-w-0 flex-1 truncate text-left ${
+                                popOpen ? "text-code-blue" : "text-foreground"
+                              }`}
+                            >
+                              {name}
+                            </button>
                             <span className="shrink-0 font-mono font-black text-foreground">
                               {formatTokenAmount(agent.totalTokens)}
                             </span>
@@ -276,15 +268,21 @@ export function RecentSessionsAccordion({
                                       : "top-full mt-2.5"
                                   }`}
                                 >
-                                  <div className="truncate text-[13px] font-black">
+                                  <div
+                                    className={`truncate text-[13px] font-black ${
+                                      isMain ? "mb-2" : ""
+                                    }`}
+                                  >
                                     {name}
                                   </div>
-                                  <div className="mb-2 text-[10px] font-black uppercase tracking-[0.04em] text-token-green/80">
-                                    {agent.labelType
-                                      ? `${agent.labelType} · `
-                                      : ""}
-                                    depth {agent.depth}
-                                  </div>
+                                  {isMain ? null : (
+                                    <div className="mb-2 text-[10px] font-black uppercase tracking-[0.04em] text-token-green/80">
+                                      {agent.labelType
+                                        ? `${agent.labelType} · `
+                                        : ""}
+                                      depth {agent.depth}
+                                    </div>
+                                  )}
                                   <div className="flex justify-between gap-3 text-xs">
                                     <span className="text-white/60">시간</span>
                                     <span className="font-mono">

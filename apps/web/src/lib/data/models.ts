@@ -82,6 +82,23 @@ export type DashboardDailyUsage = {
   sessions: number;
 };
 
+// 한 세션 안에서 메인 턴 또는 서브에이전트 하나의 사용량 분해
+export type SessionAgent = {
+  agentKey: string;
+  parentAgentKey: string;
+  depth: number;
+  labelType: string;
+  labelText: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheTokens: number;
+  totalTokens: number;
+  llmCallCount: number;
+  userTurnCount: number;
+  startedAt: string | null;
+  endedAt: string | null;
+};
+
 export type DashboardSession = {
   sessionHash: string;
   deviceId: string | null;
@@ -98,6 +115,8 @@ export type DashboardSession = {
   totalTokens: number;
   localUpdatedAt: string;
   syncedAt: string | null;
+  // 서브에이전트 분해. 2개 이상일 때만 펼침 UI를 노출한다(메인 턴 + 서브 N).
+  agents: SessionAgent[];
 };
 
 // 기간별 에이전트/토큰 구성 분해 — 히어로 지표 호버 상세에 사용한다

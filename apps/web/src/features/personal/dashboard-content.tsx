@@ -13,7 +13,7 @@ import { CompositionChart } from "./composition-chart";
 import { DailyFlowChart } from "./daily-flow-chart";
 import { HeroMetricsChips } from "./hero-metrics-chips";
 import { RecentSessionsAccordion } from "./recent-sessions-accordion";
-import { UsageCompositionCell } from "./usage-composition-cell";
+import { RecentSessionsTable } from "./recent-sessions-table";
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
 
@@ -70,49 +70,6 @@ function formatLastSyncRelative(value: string | null) {
   }
 
   return `${formatDateTime(value)} 동기화`;
-}
-
-function formatSessionTime(startedAt: string, endedAt: string) {
-  return `${formatDateTime(startedAt)} - ${formatDateTime(endedAt)}`;
-}
-
-function SessionTimeCell({
-  startedAt,
-  endedAt,
-}: {
-  startedAt: string;
-  endedAt: string;
-}) {
-  return (
-    <div
-      className="grid min-w-0 grid-cols-[14px_minmax(0,1fr)] items-center gap-2"
-      title={formatSessionTime(startedAt, endedAt)}
-    >
-      <div className="relative h-[54px]">
-        <span className="absolute left-[6px] top-[9px] h-9 w-px rounded-full bg-border" />
-        <span className="absolute left-[2px] top-[4px] h-2.5 w-2.5 rounded-full bg-foreground" />
-        <span className="absolute bottom-[4px] left-[2px] h-2.5 w-2.5 rounded-full border-2 border-muted bg-surface" />
-      </div>
-      <div className="relative h-[54px] min-w-0">
-        <div className="absolute left-0 right-0 top-[1px] flex h-4 min-w-0 items-center gap-2 whitespace-nowrap">
-          <span className="w-10 shrink-0 text-[10px] font-black uppercase leading-none tracking-[0.08em] text-muted">
-            Start
-          </span>
-          <span className="truncate font-mono text-[11px] font-black leading-none tracking-[0.05em] text-muted">
-            {formatDateTime(startedAt)}
-          </span>
-        </div>
-        <div className="absolute bottom-[1px] left-0 right-0 flex h-4 min-w-0 items-center gap-2 whitespace-nowrap">
-          <span className="w-10 shrink-0 text-[10px] font-black uppercase leading-none tracking-[0.08em] text-muted">
-            End
-          </span>
-          <span className="truncate font-mono text-[11px] font-black leading-none tracking-[0.05em] text-muted">
-            {formatDateTime(endedAt)}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 function periodDelta(current: number, previous: number, vsLabel: string) {
@@ -554,72 +511,7 @@ export function DashboardContent({
         {dashboard.recentSessions.length > 0 ? (
           <>
             <RecentSessionsAccordion sessions={dashboard.recentSessions} />
-            <div className="hidden overflow-x-auto sm:block">
-              <table className="w-full min-w-[640px] table-fixed border-separate border-spacing-0 text-left text-sm">
-                <colgroup>
-                  <col className="w-[25%]" />
-                  <col className="w-[25%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[38%]" />
-                </colgroup>
-                <thead>
-                  <tr className="text-xs font-extrabold uppercase text-muted">
-                    <th className="border-b border-border px-3 py-2">
-                      에이전트 · 기기
-                    </th>
-                    <th className="border-b border-border px-3 py-2">
-                      세션 시간
-                    </th>
-                    <th className="border-b border-border px-3 py-2 text-center">
-                      프롬프트 · 호출
-                    </th>
-                    <th className="border-b border-border px-3 py-2 text-right">
-                      총 사용량 · 구성
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dashboard.recentSessions.map((session) => (
-                    <tr key={`${session.provider}-${session.sessionHash}`}>
-                      <td className="border-b border-border px-3 py-3">
-                        <span className="block font-black">
-                          {session.providerLabel}
-                        </span>
-                        <span
-                          className="mt-[3px] block max-w-[12rem] truncate text-[11px] font-extrabold text-muted"
-                          title={session.deviceLabel}
-                        >
-                          {session.deviceLabel}
-                        </span>
-                      </td>
-                      <td className="border-b border-border px-3 py-3">
-                        <SessionTimeCell
-                          startedAt={session.startedAt}
-                          endedAt={session.endedAt}
-                        />
-                      </td>
-                      <td className="whitespace-nowrap border-b border-border px-3 py-3 text-center font-mono">
-                        <span className="font-black">
-                          {numberFormatter.format(session.userTurnCount)}
-                        </span>
-                        <span className="mx-1 text-border">·</span>
-                        <span className="font-extrabold text-muted">
-                          {numberFormatter.format(session.llmCallCount)}
-                        </span>
-                      </td>
-                      <td className="border-b border-border px-3 py-3">
-                        <UsageCompositionCell
-                          inputTokens={session.inputTokens}
-                          cacheTokens={session.cacheTokens}
-                          outputTokens={session.outputTokens}
-                          totalTokens={session.totalTokens}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <RecentSessionsTable sessions={dashboard.recentSessions} />
           </>
         ) : (
           <p className="rounded-md border border-dashed border-border bg-background p-4 text-sm font-bold leading-6 text-muted">

@@ -60,6 +60,7 @@ type syncPayload struct {
 	Device   remoteDeviceItem         `json:"device"`
 	Daily    []remoteDailyUsageItem   `json:"daily"`
 	Sessions []remoteSessionUsageItem `json:"sessions"`
+	Agents   []remoteSessionAgentItem `json:"agents,omitempty"`
 }
 
 type remoteDeviceItem struct {
@@ -92,6 +93,24 @@ type remoteSessionUsageItem struct {
 	InputTokens    int    `json:"input_tokens"`
 	OutputTokens   int    `json:"output_tokens"`
 	CacheTokens    int    `json:"cache_tokens"`
+	LocalUpdatedAt string `json:"local_updated_at"`
+}
+
+type remoteSessionAgentItem struct {
+	SessionHash    string `json:"session_hash"`
+	Provider       string `json:"provider"`
+	AgentKey       string `json:"agent_key"`
+	ParentAgentKey string `json:"parent_agent_key"`
+	Depth          int    `json:"depth"`
+	LabelType      string `json:"label_type"`
+	LabelText      string `json:"label_text"`
+	InputTokens    int    `json:"input_tokens"`
+	OutputTokens   int    `json:"output_tokens"`
+	CacheTokens    int    `json:"cache_tokens"`
+	LLMCallCount   int    `json:"llm_call_count"`
+	UserTurnCount  int    `json:"user_turn_count"`
+	StartedAt      string `json:"started_at"`
+	EndedAt        string `json:"ended_at"`
 	LocalUpdatedAt string `json:"local_updated_at"`
 }
 
@@ -295,6 +314,10 @@ func runSync(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	agents, err := store.ListPendingSessionAgents(ctx)
+	if err != nil {
+		return err
+	}
 
 	resolvedEndpoint := *endpoint
 	resolvedToken := *token
@@ -312,7 +335,7 @@ func runSync(args []string, stdout io.Writer) error {
 		resolvedEndpoint = defaultSyncEndpoint
 	}
 
-	payload := buildSyncPayload(device, daily, sessions)
+	payload := buildSyncPayload(device, daily, sessions, agents)
 	if err := postSyncPayload(ctx, resolvedEndpoint, resolvedToken, payload); err != nil {
 		return err
 	}
@@ -343,7 +366,7 @@ func getenvDefault(name string, fallback string) string {
 	return fallback
 }
 
-func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, sessions []state.SessionRow) syncPayload {
+func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, sessions []state.SessionRow, agents []state.SessionAgentRow) syncPayload {
 	payload := syncPayload{
 		Device: remoteDeviceItem{
 			DeviceID:    device.DeviceID,
@@ -352,6 +375,7 @@ func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, ses
 		},
 		Daily:    make([]remoteDailyUsageItem, 0, len(daily)),
 		Sessions: make([]remoteSessionUsageItem, 0, len(sessions)),
+		Agents:   make([]remoteSessionAgentItem, 0, len(agents)),
 	}
 	for _, row := range daily {
 		payload.Daily = append(payload.Daily, remoteDailyUsageItem{
@@ -379,6 +403,25 @@ func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, ses
 			InputTokens:    row.Tokens.Input,
 			OutputTokens:   row.Tokens.Output,
 			CacheTokens:    row.Tokens.Cache,
+			LocalUpdatedAt: row.UpdatedAt,
+		})
+	}
+	for _, row := range agents {
+		payload.Agents = append(payload.Agents, remoteSessionAgentItem{
+			SessionHash:    row.SessionHash,
+			Provider:       row.Provider,
+			AgentKey:       row.AgentKey,
+			ParentAgentKey: row.ParentAgentKey,
+			Depth:          row.Depth,
+			LabelType:      row.LabelType,
+			LabelText:      row.LabelText,
+			InputTokens:    row.InputTokens,
+			OutputTokens:   row.OutputTokens,
+			CacheTokens:    row.CacheTokens,
+			LLMCallCount:   row.LLMCallCount,
+			UserTurnCount:  row.UserTurnCount,
+			StartedAt:      row.StartedAt,
+			EndedAt:        row.EndedAt,
 			LocalUpdatedAt: row.UpdatedAt,
 		})
 	}
@@ -465,6 +508,11 @@ func inspectProvider(provider string, root string, stateDir string, parseSession
 		if err := store.UpsertParsedSourceFile(ctx, provider, key, metadata.SizeBytes, metadata.ModifiedAt, parsed); err != nil {
 			return inspectResult{}, err
 		}
+	}
+	// Roll Codex subagent threads (separate session ids) up onto their parent
+	// session. No-op for Claude, whose subagent files already share the session id.
+	if err := store.ResolveSessionRoots(ctx, provider); err != nil {
+		return inspectResult{}, err
 	}
 	result.SessionsFound = len(result.Sessions)
 	return result, nil

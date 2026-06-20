@@ -2,6 +2,7 @@ package codex
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,7 +39,43 @@ type tokenInfo struct {
 }
 
 type sessionPayload struct {
-	ID string `json:"id"`
+	ID             string          `json:"id"`
+	ParentThreadID string          `json:"parent_thread_id"`
+	ForkedFromID   string          `json:"forked_from_id"`
+	ThreadSource   string          `json:"thread_source"`
+	AgentRole      string          `json:"agent_role"`
+	AgentNickname  string          `json:"agent_nickname"`
+	// Source is "cli"/"tui" (a bare string) for user sessions and an object
+	// ({"subagent": {...}}) for subagent threads, so decode it lazily.
+	Source json.RawMessage `json:"source"`
+}
+
+type sourceWrapper struct {
+	Subagent *subagentSource `json:"subagent"`
+}
+
+type subagentSource struct {
+	ThreadSpawn *threadSpawn `json:"thread_spawn"`
+	// Other labels subagents in older Codex builds that omit thread_spawn, e.g.
+	// {"subagent": {"other": "guardian"}}.
+	Other string `json:"other"`
+}
+
+type threadSpawn struct {
+	ParentThreadID string `json:"parent_thread_id"`
+	Depth          int    `json:"depth"`
+	AgentRole      string `json:"agent_role"`
+	AgentNickname  string `json:"agent_nickname"`
+}
+
+// threadMeta is the subagent identity pulled from a Codex session_meta payload.
+type threadMeta struct {
+	id           string
+	parentID     string
+	threadSource string
+	depth        int
+	role         string
+	nickname     string
 }
 
 type tokenUsage struct {
@@ -65,6 +102,7 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 	var summary SessionSummary
 	var rawSessionID string
 	var calls []usage.UsageCall
+	var meta threadMeta
 
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 1024), 64*1024*1024)
@@ -81,11 +119,12 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 
 		switch current.Type {
 		case "session_meta":
-			id, err := readSessionID(current.Payload)
+			parsedMeta, err := readThreadMeta(current.Payload)
 			if err != nil {
 				return SessionUsage{}, err
 			}
-			rawSessionID = id
+			meta = parsedMeta
+			rawSessionID = parsedMeta.id
 		case "event_msg":
 			eventType, lastUsage, hasLastUsage, err := readEventPayload(current.Payload)
 			if err != nil {
@@ -136,18 +175,83 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 	for index := range calls {
 		calls[index].CallKey = usage.HashCallKey("codex", summary.SessionHash, calls[index].OccurredAt, fmt.Sprintf("%d", calls[index].CallIndex))
 	}
-	return SessionUsage{
-		Summary: summary,
-		Calls:   calls,
-	}, nil
+
+	result := SessionUsage{
+		Summary:         summary,
+		Calls:           calls,
+		OwnSessionID:    rawSessionID,
+		ParentSessionID: meta.parentID,
+	}
+	if meta.threadSource == "subagent" {
+		result.Agent = usage.AgentMeta{
+			AgentKey:     rawSessionID,
+			ParentKey:    meta.parentID,
+			ThreadSource: "subagent",
+			Depth:        meta.depth,
+			LabelType:    meta.role,
+			LabelText:    meta.nickname,
+		}
+	} else {
+		result.Agent = usage.AgentMeta{
+			AgentKey:     "main",
+			ThreadSource: "user",
+			LabelType:    "main",
+			LabelText:    "메인 턴",
+		}
+	}
+	return result, nil
 }
 
-func readSessionID(raw json.RawMessage) (string, error) {
+// readThreadMeta pulls the thread identity and subagent linkage out of a Codex
+// session_meta payload. The parent id is resolved with the same priority Codex
+// has used across versions: top-level parent_thread_id, then the nested
+// source.subagent.thread_spawn block, then forked_from_id.
+func readThreadMeta(raw json.RawMessage) (threadMeta, error) {
 	var payload sessionPayload
 	if err := json.Unmarshal(raw, &payload); err != nil {
-		return "", fmt.Errorf("parse session_meta payload: %w", err)
+		return threadMeta{}, fmt.Errorf("parse session_meta payload: %w", err)
 	}
-	return strings.TrimSpace(payload.ID), nil
+	meta := threadMeta{
+		id:           strings.TrimSpace(payload.ID),
+		threadSource: strings.TrimSpace(payload.ThreadSource),
+		role:         strings.TrimSpace(payload.AgentRole),
+		nickname:     strings.TrimSpace(payload.AgentNickname),
+	}
+	var spawn *threadSpawn
+	if trimmed := bytes.TrimSpace(payload.Source); len(trimmed) > 0 && trimmed[0] == '{' {
+		var wrapper sourceWrapper
+		if err := json.Unmarshal(trimmed, &wrapper); err == nil && wrapper.Subagent != nil {
+			spawn = wrapper.Subagent.ThreadSpawn
+			if meta.role == "" {
+				meta.role = strings.TrimSpace(wrapper.Subagent.Other)
+			}
+		}
+	}
+	switch {
+	case strings.TrimSpace(payload.ParentThreadID) != "":
+		meta.parentID = strings.TrimSpace(payload.ParentThreadID)
+	case spawn != nil && strings.TrimSpace(spawn.ParentThreadID) != "":
+		meta.parentID = strings.TrimSpace(spawn.ParentThreadID)
+	default:
+		meta.parentID = strings.TrimSpace(payload.ForkedFromID)
+	}
+	if spawn != nil {
+		if meta.depth == 0 {
+			meta.depth = spawn.Depth
+		}
+		if meta.role == "" {
+			meta.role = strings.TrimSpace(spawn.AgentRole)
+		}
+		if meta.nickname == "" {
+			meta.nickname = strings.TrimSpace(spawn.AgentNickname)
+		}
+	}
+	// Subagent threads always sit at least one level under the main turn, even
+	// when an older build omits the depth field.
+	if meta.threadSource == "subagent" && meta.depth == 0 {
+		meta.depth = 1
+	}
+	return meta, nil
 }
 
 func readEventPayload(raw json.RawMessage) (string, tokenUsage, bool, error) {

@@ -14,6 +14,7 @@ import {
   summarizeViewerWeeklyUsage,
   type UsageDailyAggregateRow,
   type UsageSessionAggregateRow,
+  type UsageSessionAgentRow,
 } from "@/lib/data/usage-session-aggregates";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { formatTokenAmount } from "@/lib/format/tokens";
@@ -380,11 +381,50 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
       );
     }
 
+    // 최근 세션들의 서브에이전트 분해를 한 번에 조회해 세션별로 묶는다.
+    const sessionHashes = [
+      ...new Set(sessionRows.map((session) => session.session_hash)),
+    ];
+    const agentsBySession = new Map<string, UsageSessionAgentRow[]>();
+    if (sessionHashes.length > 0) {
+      const agentsResult = await supabase
+        .from("usage_session_agents")
+        .select(
+          [
+            "session_hash",
+            "agent_key",
+            "parent_agent_key",
+            "depth",
+            "label_type",
+            "label_text",
+            "input_tokens",
+            "output_tokens",
+            "cache_tokens",
+            "llm_call_count",
+            "user_turn_count",
+            "started_at",
+            "ended_at",
+          ].join(","),
+        )
+        .eq("user_id", viewer.userId)
+        .in("session_hash", sessionHashes);
+
+      for (const agent of (agentsResult.data ??
+        []) as unknown as (UsageSessionAgentRow & {
+        session_hash: string;
+      })[]) {
+        const list = agentsBySession.get(agent.session_hash) ?? [];
+        list.push(agent);
+        agentsBySession.set(agent.session_hash, list);
+      }
+    }
+
     const enrichedSessionRows = sessionRows.map((session) => ({
       ...session,
       device_label: session.device_id
         ? (deviceLabelsById.get(session.device_id) ?? null)
         : null,
+      agents: agentsBySession.get(session.session_hash) ?? [],
     }));
     const dashboard = summarizeUsageDailyDashboard(dailyRows, {
       recentSessionRows: enrichedSessionRows,

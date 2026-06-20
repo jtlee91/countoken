@@ -9,6 +9,41 @@ import (
 type SessionUsage struct {
 	Summary SessionSummary
 	Calls   []UsageCall
+
+	// Agent describes this source file's contribution as a single "agent" (the
+	// main turn or one subagent). One source file = one agent. Empty AgentKey
+	// means the provider/file carries no subagent breakdown.
+	Agent AgentMeta
+
+	// OwnSessionID / ParentSessionID are the raw ids this file reports, used to
+	// resolve Codex subagent files (separate session ids) up to their root
+	// parent. Claude subagent files already share the parent's sessionId, so
+	// ParentSessionID stays empty there.
+	OwnSessionID    string
+	ParentSessionID string
+
+	// AgentLabels are labels this file knows about *other* agents in the same
+	// session. Claude's main file carries the Task-call map (agentId →
+	// subagent_type/description); the subagent file itself has no label.
+	AgentLabels []AgentLabel
+}
+
+// AgentMeta is one agent row's identity within a logical session.
+type AgentMeta struct {
+	AgentKey     string // stable within session: codex thread id, claude agentId, or "main"
+	ParentKey    string // immediate parent agent_key; "" for the main/root agent
+	ThreadSource string // "user" (main) | "subagent"
+	Depth        int    // nesting depth; 0 for the main turn
+	LabelType    string // codex agent_role / claude subagent_type / "main"
+	LabelText    string // codex agent_nickname / claude description / "메인 턴"
+}
+
+// AgentLabel maps a child agent_key to its display label, sourced from a parent
+// file that spawned it (Claude main file's Task calls).
+type AgentLabel struct {
+	AgentKey  string
+	LabelType string
+	LabelText string
 }
 
 type SessionSummary struct {

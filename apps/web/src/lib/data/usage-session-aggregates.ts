@@ -4,11 +4,27 @@ import type {
   DashboardData,
   DashboardSession,
   DashboardTokenBreakdown,
+  SessionAgent,
   UsageBreakdownSummary,
 } from "./models.ts";
 
 const KOREA_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+export type UsageSessionAgentRow = {
+  agent_key: string;
+  parent_agent_key: string;
+  depth: number;
+  label_type: string;
+  label_text: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_tokens: number;
+  llm_call_count: number;
+  user_turn_count: number;
+  started_at: string | null;
+  ended_at: string | null;
+};
 
 export type UsageSessionAggregateRow = {
   session_hash: string;
@@ -24,6 +40,7 @@ export type UsageSessionAggregateRow = {
   cache_tokens: number;
   local_updated_at: string;
   synced_at: string | null;
+  agents?: UsageSessionAgentRow[] | null;
 };
 
 export type UsageDailyAggregateRow = {
@@ -492,7 +509,39 @@ function toDashboardSession(row: UsageSessionAggregateRow): DashboardSession {
     totalTokens: rowTotalTokens(row),
     localUpdatedAt: row.local_updated_at,
     syncedAt: row.synced_at,
+    agents: toSessionAgents(row.agents),
   };
+}
+
+function toSessionAgents(
+  rows: UsageSessionAgentRow[] | null | undefined,
+): SessionAgent[] {
+  if (!rows || rows.length === 0) {
+    return [];
+  }
+  return rows
+    .map((row) => ({
+      agentKey: row.agent_key,
+      parentAgentKey: row.parent_agent_key,
+      depth: row.depth,
+      labelType: row.label_type,
+      labelText: row.label_text,
+      inputTokens: row.input_tokens,
+      outputTokens: row.output_tokens,
+      cacheTokens: row.cache_tokens,
+      totalTokens: row.input_tokens + row.output_tokens + row.cache_tokens,
+      llmCallCount: row.llm_call_count,
+      userTurnCount: row.user_turn_count,
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
+    }))
+    .sort((a, b) => {
+      // 메인 턴을 맨 위로, 그다음 깊이·시작시각 순
+      if (a.agentKey === "main" && b.agentKey !== "main") return -1;
+      if (b.agentKey === "main" && a.agentKey !== "main") return 1;
+      if (a.depth !== b.depth) return a.depth - b.depth;
+      return (a.startedAt ?? "").localeCompare(b.startedAt ?? "");
+    });
 }
 
 export function summarizeUsageSessions(

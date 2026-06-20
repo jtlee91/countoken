@@ -24,7 +24,11 @@ import (
 // that shares a session_hash, so Claude's separate subagent files
 // (<session>/subagents/agent-*.jsonl, written with the parent's sessionId) are
 // rolled into the parent session instead of clobbering it.
-const parserVersion = 3
+//
+// v4: subagent breakdown — per-file agent rows (session_agents) plus Codex root
+// resolution that rolls subagent threads (separate session ids) onto their
+// parent session_hash.
+const parserVersion = 4
 
 type Store struct {
 	db *sql.DB
@@ -64,6 +68,24 @@ type DailyUsageRow struct {
 	FirstUsedAt    string
 	LastUsedAt     string
 	LocalUpdatedAt string
+}
+
+type SessionAgentRow struct {
+	Provider       string
+	SessionHash    string
+	AgentKey       string
+	ParentAgentKey string
+	Depth          int
+	LabelType      string
+	LabelText      string
+	InputTokens    int
+	OutputTokens   int
+	CacheTokens    int
+	LLMCallCount   int
+	UserTurnCount  int
+	StartedAt      string
+	EndedAt        string
+	UpdatedAt      string
 }
 
 type LocalDevice struct {
@@ -218,6 +240,68 @@ func (store *Store) ListPendingUsageCalls(ctx context.Context) ([]UsageCallRow, 
 		return nil, err
 	}
 	return calls, nil
+}
+
+// ListPendingSessionAgents returns the subagent breakdown rows for every session
+// pending sync, so the parent session and its agents upload together.
+func (store *Store) ListPendingSessionAgents(ctx context.Context) ([]SessionAgentRow, error) {
+	rows, err := store.db.QueryContext(ctx, `
+		select
+			sa.provider,
+			sa.session_hash,
+			sa.agent_key,
+			sa.parent_agent_key,
+			sa.depth,
+			sa.label_type,
+			sa.label_text,
+			sa.input_tokens,
+			sa.output_tokens,
+			sa.cache_tokens,
+			sa.llm_call_count,
+			sa.user_turn_count,
+			sa.started_at,
+			sa.ended_at,
+			sa.updated_at
+		from session_agents sa
+		join sessions s
+		  on s.provider = sa.provider
+		 and s.session_hash = sa.session_hash
+		where s.need_sync = 1
+		order by sa.provider, sa.session_hash, sa.depth, sa.agent_key
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var agents []SessionAgentRow
+	for rows.Next() {
+		var agent SessionAgentRow
+		if err := rows.Scan(
+			&agent.Provider,
+			&agent.SessionHash,
+			&agent.AgentKey,
+			&agent.ParentAgentKey,
+			&agent.Depth,
+			&agent.LabelType,
+			&agent.LabelText,
+			&agent.InputTokens,
+			&agent.OutputTokens,
+			&agent.CacheTokens,
+			&agent.LLMCallCount,
+			&agent.UserTurnCount,
+			&agent.StartedAt,
+			&agent.EndedAt,
+			&agent.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		agents = append(agents, agent)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return agents, nil
 }
 
 func (store *Store) ListPendingDailyUsage(ctx context.Context) ([]DailyUsageRow, error) {
@@ -467,15 +551,19 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 			size_bytes,
 			modified_at,
 			session_hash,
-			last_parsed_at
-		) values (?, ?, ?, ?, ?, ?)
+			last_parsed_at,
+			own_session_id,
+			parent_session_id
+		) values (?, ?, ?, ?, ?, ?, ?, ?)
 		on conflict(file_key) do update set
 			provider = excluded.provider,
 			size_bytes = excluded.size_bytes,
 			modified_at = excluded.modified_at,
 			session_hash = excluded.session_hash,
-			last_parsed_at = excluded.last_parsed_at
-	`, fileKey, provider, sizeBytes, modifiedAt, parsed.Summary.SessionHash, now); err != nil {
+			last_parsed_at = excluded.last_parsed_at,
+			own_session_id = excluded.own_session_id,
+			parent_session_id = excluded.parent_session_id
+	`, fileKey, provider, sizeBytes, modifiedAt, parsed.Summary.SessionHash, now, parsed.OwnSessionID, parsed.ParentSessionID); err != nil {
 		return err
 	}
 
@@ -538,7 +626,190 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 		return err
 	}
 
+	// Record this file's contribution as one "agent" (the main turn or one
+	// subagent) under the session. Token/call/time come from this file's
+	// usage_calls; identity/label from the parser. The label is upserted only when
+	// non-empty so Claude's split sources (subagent file = tokens, main file =
+	// label) don't clobber each other regardless of parse order.
+	if agentKey := parsed.Agent.AgentKey; agentKey != "" {
+		if _, err := tx.ExecContext(ctx, `
+			insert into session_agents (
+				provider, session_hash, agent_key, parent_agent_key, depth,
+				label_type, label_text,
+				input_tokens, output_tokens, cache_tokens, llm_call_count, user_turn_count,
+				started_at, ended_at, source_file_key, updated_at
+			)
+			select
+				?, ?, ?, ?, ?,
+				?, ?,
+				coalesce(sum(input_tokens), 0), coalesce(sum(output_tokens), 0), coalesce(sum(cache_tokens), 0),
+				count(*), ?,
+				coalesce(min(occurred_at), ?), coalesce(max(occurred_at), ?), ?, ?
+			from usage_calls
+			where provider = ? and source_file_key = ?
+			on conflict(provider, session_hash, agent_key) do update set
+				parent_agent_key = excluded.parent_agent_key,
+				depth = excluded.depth,
+				label_type = case when excluded.label_type != '' then excluded.label_type else session_agents.label_type end,
+				label_text = case when excluded.label_text != '' then excluded.label_text else session_agents.label_text end,
+				input_tokens = excluded.input_tokens,
+				output_tokens = excluded.output_tokens,
+				cache_tokens = excluded.cache_tokens,
+				llm_call_count = excluded.llm_call_count,
+				user_turn_count = excluded.user_turn_count,
+				started_at = excluded.started_at,
+				ended_at = excluded.ended_at,
+				source_file_key = excluded.source_file_key,
+				updated_at = excluded.updated_at
+		`, provider, parsed.Summary.SessionHash, agentKey, parsed.Agent.ParentKey, parsed.Agent.Depth,
+			parsed.Agent.LabelType, parsed.Agent.LabelText,
+			parsed.Summary.UserTurnCount,
+			parsed.Summary.StartedAt, parsed.Summary.EndedAt, fileKey, now,
+			provider, fileKey); err != nil {
+			return err
+		}
+	}
+
+	// Apply labels this file knows about other agents it spawned (Claude main
+	// file's Agent/Task calls → agentId). Insert a label-only stub if the
+	// subagent's own row hasn't been parsed yet; never overwrite tokens.
+	for _, label := range parsed.AgentLabels {
+		if label.AgentKey == "" || (label.LabelType == "" && label.LabelText == "") {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+			insert into session_agents (
+				provider, session_hash, agent_key, parent_agent_key, depth,
+				label_type, label_text, updated_at
+			) values (?, ?, ?, 'main', 1, ?, ?, ?)
+			on conflict(provider, session_hash, agent_key) do update set
+				label_type = case when excluded.label_type != '' then excluded.label_type else session_agents.label_type end,
+				label_text = case when excluded.label_text != '' then excluded.label_text else session_agents.label_text end,
+				updated_at = excluded.updated_at
+		`, provider, parsed.Summary.SessionHash, label.AgentKey, label.LabelType, label.LabelText, now); err != nil {
+			return err
+		}
+	}
+
 	return tx.Commit()
+}
+
+// ResolveSessionRoots rolls Codex subagent files — each written under its own
+// session id — up to their root parent session, so a spawned thread's calls and
+// agent row move onto the parent's session_hash and the subagent stops showing as
+// a separate session. Linkage comes from source_files.{own,parent}_session_id.
+// Claude subagent files already share the parent's session id (parent_session_id
+// empty), so every node is its own root and this is a no-op for them.
+func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) error {
+	rows, err := store.db.QueryContext(ctx, `
+		select own_session_id, parent_session_id
+		from source_files
+		where provider = ? and own_session_id != ''
+	`, provider)
+	if err != nil {
+		return err
+	}
+	parent := map[string]string{}
+	var owns []string
+	for rows.Next() {
+		var own, par string
+		if err := rows.Scan(&own, &par); err != nil {
+			rows.Close()
+			return err
+		}
+		if _, seen := parent[own]; !seen {
+			owns = append(owns, own)
+		}
+		parent[own] = strings.TrimSpace(par)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	type remap struct{ oldHash, newHash string }
+	var remaps []remap
+	roots := map[string]struct{}{}
+	for _, own := range owns {
+		root := resolveRoot(own, parent)
+		roots[usage.HashSessionID(provider, root)] = struct{}{}
+		if root != own {
+			remaps = append(remaps, remap{
+				oldHash: usage.HashSessionID(provider, own),
+				newHash: usage.HashSessionID(provider, root),
+			})
+		}
+	}
+	if len(remaps) == 0 {
+		return nil
+	}
+
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	now := time.Now().In(kst).Format(time.RFC3339Nano)
+
+	for _, r := range remaps {
+		if r.oldHash == r.newHash {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `update usage_calls set session_hash = ? where provider = ? and session_hash = ?`, r.newHash, provider, r.oldHash); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `update session_agents set session_hash = ? where provider = ? and session_hash = ?`, r.newHash, provider, r.oldHash); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `update source_files set session_hash = ? where provider = ? and session_hash = ?`, r.newHash, provider, r.oldHash); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `delete from sessions where provider = ? and session_hash = ?`, provider, r.oldHash); err != nil {
+			return err
+		}
+	}
+
+	// Recompute token/call/time aggregates for each affected root from usage_calls.
+	// user_turn_count is left as the root's own human-prompt count (subagents
+	// receive prompts but add no human turns to the rolled-up session).
+	for rootHash := range roots {
+		if _, err := tx.ExecContext(ctx, `
+			update sessions set
+				input_tokens = (select coalesce(sum(input_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
+				output_tokens = (select coalesce(sum(output_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
+				cache_tokens = (select coalesce(sum(cache_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
+				llm_call_count = (select count(*) from usage_calls where provider = ? and session_hash = ?),
+				started_at = coalesce((select min(occurred_at) from usage_calls where provider = ? and session_hash = ?), started_at),
+				ended_at = coalesce((select max(occurred_at) from usage_calls where provider = ? and session_hash = ?), ended_at),
+				updated_at = ?, need_sync = 1, synced_at = null
+			where provider = ? and session_hash = ?
+		`, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, now, provider, rootHash); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// resolveRoot walks own→parent links to the topmost ancestor. If a parent id is
+// not among the parsed files, the node is kept as its own root so its session
+// stays visible rather than merging into a phantom hash.
+func resolveRoot(own string, parent map[string]string) string {
+	seen := map[string]struct{}{}
+	cur := own
+	for {
+		if _, ok := seen[cur]; ok {
+			return cur
+		}
+		seen[cur] = struct{}{}
+		par := parent[cur]
+		if par == "" {
+			return cur
+		}
+		if _, ok := parent[par]; !ok {
+			return own
+		}
+		cur = par
+	}
 }
 
 func (store *Store) DeleteSourceFile(ctx context.Context, provider string, fileKey string) error {
@@ -599,6 +870,26 @@ func (store *Store) migrate(ctx context.Context) error {
 			foreign key(session_hash) references sessions(session_hash)
 		);
 
+		create table if not exists session_agents (
+			provider text not null,
+			session_hash text not null,
+			agent_key text not null,
+			parent_agent_key text not null default '',
+			depth integer not null default 0,
+			label_type text not null default '',
+			label_text text not null default '',
+			input_tokens integer not null default 0,
+			output_tokens integer not null default 0,
+			cache_tokens integer not null default 0,
+			llm_call_count integer not null default 0,
+			user_turn_count integer not null default 0,
+			started_at text not null default '',
+			ended_at text not null default '',
+			source_file_key text not null default '',
+			updated_at text not null,
+			primary key(provider, session_hash, agent_key)
+		);
+
 		create table if not exists local_device (
 			device_id text primary key,
 			device_label text not null,
@@ -616,11 +907,15 @@ func (store *Store) migrate(ctx context.Context) error {
 		create index if not exists idx_source_files_provider_modified_at on source_files(provider, modified_at);
 		create index if not exists idx_usage_calls_session on usage_calls(provider, session_hash, call_index);
 		create index if not exists idx_usage_calls_source_file on usage_calls(provider, source_file_key);
+		create index if not exists idx_session_agents_session on session_agents(provider, session_hash);
 	`)
 	if err != nil {
 		return err
 	}
 	if err := store.ensureSessionSyncColumns(ctx); err != nil {
+		return err
+	}
+	if err := store.ensureSourceFileLinkageColumns(ctx); err != nil {
 		return err
 	}
 	if err := store.dropRemovedTokenColumns(ctx); err != nil {
@@ -660,6 +955,9 @@ func (store *Store) applyParserVersion(ctx context.Context) error {
 	}
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx, `delete from source_files`); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `delete from session_agents`); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `update sessions set need_sync = 1, synced_at = null`); err != nil {
@@ -750,6 +1048,25 @@ func (store *Store) ensureSessionSyncColumns(ctx context.Context) error {
 	}
 	if !columns["synced_at"] {
 		if _, err := store.db.ExecContext(ctx, `alter table sessions add column synced_at text`); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ensureSourceFileLinkageColumns adds the raw thread-id columns used to resolve
+// Codex subagent files (separate session ids) up to their root parent. They are
+// empty for older rows until re-parsed (the parserVersion bump forces that).
+func (store *Store) ensureSourceFileLinkageColumns(ctx context.Context) error {
+	for _, column := range []string{"own_session_id", "parent_session_id"} {
+		hasColumn, err := store.tableHasColumn(ctx, "source_files", column)
+		if err != nil {
+			return err
+		}
+		if hasColumn {
+			continue
+		}
+		if _, err := store.db.ExecContext(ctx, `alter table source_files add column `+column+` text not null default ''`); err != nil {
 			return err
 		}
 	}

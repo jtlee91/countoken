@@ -37,11 +37,30 @@ type SessionUsage = {
   local_updated_at: string;
 };
 
+type SessionAgent = {
+  session_hash: string;
+  provider: Provider;
+  agent_key: string;
+  parent_agent_key: string;
+  depth: number;
+  label_type: string;
+  label_text: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_tokens: number;
+  llm_call_count: number;
+  user_turn_count: number;
+  started_at: string;
+  ended_at: string;
+  local_updated_at: string;
+};
+
 type SyncPayload = {
   user_id?: string;
   device: SyncDevice;
   daily: DailyUsage[];
   sessions?: SessionUsage[];
+  agents?: SessionAgent[];
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -122,6 +141,31 @@ function isSessionUsage(value: unknown): value is SessionUsage {
     isNonNegativeInteger(item.cache_tokens);
 }
 
+function isSessionAgent(value: unknown): value is SessionAgent {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return isNonEmptyString(item.session_hash) &&
+    item.session_hash.length <= 128 &&
+    isProvider(item.provider) &&
+    isNonEmptyString(item.agent_key) &&
+    item.agent_key.length <= 128 &&
+    typeof item.parent_agent_key === "string" &&
+    item.parent_agent_key.length <= 128 &&
+    isNonNegativeInteger(item.depth) &&
+    typeof item.label_type === "string" &&
+    item.label_type.length <= 120 &&
+    typeof item.label_text === "string" &&
+    item.label_text.length <= 500 &&
+    isNonNegativeInteger(item.input_tokens) &&
+    isNonNegativeInteger(item.output_tokens) &&
+    isNonNegativeInteger(item.cache_tokens) &&
+    isNonNegativeInteger(item.llm_call_count) &&
+    isNonNegativeInteger(item.user_turn_count) &&
+    typeof item.started_at === "string" &&
+    typeof item.ended_at === "string" &&
+    typeof item.local_updated_at === "string";
+}
+
 function parsePayload(value: unknown): SyncPayload | null {
   if (!value || typeof value !== "object") return null;
   const payload = value as Record<string, unknown>;
@@ -133,6 +177,11 @@ function parsePayload(value: unknown): SyncPayload | null {
     if (!Array.isArray(payload.sessions)) return null;
     if (payload.sessions.length > 5000) return null;
     if (!payload.sessions.every(isSessionUsage)) return null;
+  }
+  if (payload.agents !== undefined) {
+    if (!Array.isArray(payload.agents)) return null;
+    if (payload.agents.length > 20000) return null;
+    if (!payload.agents.every(isSessionAgent)) return null;
   }
 
   return payload as SyncPayload;
@@ -258,8 +307,28 @@ Deno.serve(async (req: Request) => {
     synced_at: syncedAt,
   }));
 
-  if (dailyRows.length === 0 && sessionRows.length === 0) {
-    return jsonResponse({ daily_upserted: 0, sessions_upserted: 0 });
+  const agentRows = (payload.agents ?? []).map((agent) => ({
+    user_id: userID,
+    session_hash: agent.session_hash,
+    provider: agent.provider,
+    agent_key: agent.agent_key,
+    parent_agent_key: agent.parent_agent_key,
+    depth: agent.depth,
+    label_type: agent.label_type,
+    label_text: agent.label_text,
+    input_tokens: agent.input_tokens,
+    output_tokens: agent.output_tokens,
+    cache_tokens: agent.cache_tokens,
+    llm_call_count: agent.llm_call_count,
+    user_turn_count: agent.user_turn_count,
+    started_at: agent.started_at || null,
+    ended_at: agent.ended_at || null,
+    local_updated_at: agent.local_updated_at,
+    synced_at: syncedAt,
+  }));
+
+  if (dailyRows.length === 0 && sessionRows.length === 0 && agentRows.length === 0) {
+    return jsonResponse({ daily_upserted: 0, sessions_upserted: 0, agents_upserted: 0 });
   }
 
   if (sessionRows.length > 0) {
@@ -269,6 +338,16 @@ Deno.serve(async (req: Request) => {
 
     if (sessionError) {
       return jsonResponse({ error: "database_error", detail: sessionError.message }, 500);
+    }
+  }
+
+  if (agentRows.length > 0) {
+    const { error: agentError } = await supabase
+      .from("usage_session_agents")
+      .upsert(agentRows, { onConflict: "user_id,session_hash,provider,agent_key" });
+
+    if (agentError) {
+      return jsonResponse({ error: "database_error", detail: agentError.message }, 500);
     }
   }
 
@@ -285,5 +364,6 @@ Deno.serve(async (req: Request) => {
   return jsonResponse({
     daily_upserted: dailyRows.length,
     sessions_upserted: sessionRows.length,
+    agents_upserted: agentRows.length,
   });
 });

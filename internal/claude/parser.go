@@ -8,11 +8,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/jtlee/local-agent-usage/internal/usage"
 )
+
+// agentIDPattern pulls the spawned subagent's agentId out of a Task tool_result
+// body, where Claude prints e.g. "agentId: afa06d66869274027 (use SendMessage…)".
+var agentIDPattern = regexp.MustCompile(`agentId:\s*([0-9a-zA-Z]+)`)
 
 var ErrNoUsage = errors.New("claude session contains no usage entries")
 
@@ -31,7 +36,25 @@ type record struct {
 	IsMeta      bool    `json:"isMeta"`
 	RequestID   string  `json:"requestId"`
 	IsSidechain bool    `json:"isSidechain"`
+	AgentID     string  `json:"agentId"`
 	Message     message `json:"message"`
+}
+
+// contentBlock is one element of a Claude message's content array, covering both
+// the Task tool_use (carries subagent_type/description) and its tool_result
+// (carries the spawned agentId in its body).
+type contentBlock struct {
+	Type      string          `json:"type"`
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Input     json.RawMessage `json:"input"`
+	ToolUseID string          `json:"tool_use_id"`
+	Content   json.RawMessage `json:"content"`
+}
+
+type taskInput struct {
+	SubagentType string `json:"subagent_type"`
+	Description  string `json:"description"`
 }
 
 type message struct {
@@ -83,6 +106,12 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 	var startedAt time.Time
 	var endedAt time.Time
 
+	// Subagent-breakdown collection. The main file carries the Task → agentId →
+	// {subagent_type, description} map; a subagent file carries its own agentId.
+	taskByToolUse := map[string]taskInput{}
+	agentByToolUse := map[string]string{}
+	var fileAgentID string
+
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 1024), 64*1024*1024)
 	for scanner.Scan() {
@@ -100,6 +129,27 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 		}
 		if current.UUID != "" {
 			recordsByUUID[current.UUID] = current
+		}
+		if fileAgentID == "" && current.AgentID != "" {
+			fileAgentID = strings.TrimSpace(current.AgentID)
+		}
+		for _, block := range decodeContentBlocks(current.Message.Content) {
+			switch block.Type {
+			case "tool_use":
+				// The subagent-spawn tool is named "Agent" in current Claude Code
+				// and "Task" in older builds; both carry subagent_type/description.
+				if (block.Name == "Agent" || block.Name == "Task") && block.ID != "" {
+					var input taskInput
+					_ = json.Unmarshal(block.Input, &input)
+					taskByToolUse[block.ID] = input
+				}
+			case "tool_result":
+				if block.ToolUseID != "" {
+					if id := extractAgentID(block.Content); id != "" {
+						agentByToolUse[block.ToolUseID] = id
+					}
+				}
+			}
 		}
 		if isUserPrompt(current) {
 			userPromptCount++
@@ -165,10 +215,61 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 		calls[index].CallKey = usage.HashCallKey("claude", summary.SessionHash, entry.RequestID, entry.MessageID, entry.UUID, fmt.Sprintf("%d", calls[index].CallIndex))
 	}
 
-	return SessionUsage{
-		Summary: summary,
-		Calls:   calls,
-	}, nil
+	result := SessionUsage{
+		Summary:      summary,
+		Calls:        calls,
+		OwnSessionID: rawSessionID,
+	}
+	if strings.Contains(filepath.ToSlash(path), "/subagents/") || fileAgentID != "" {
+		// Subagent file: its own agent row. Label is filled later from the
+		// parent (main) file's Task map, keyed by the same agentId.
+		agentKey := fileAgentID
+		if agentKey == "" {
+			agentKey = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		}
+		result.Agent = usage.AgentMeta{
+			AgentKey:     agentKey,
+			ParentKey:    "main",
+			ThreadSource: "subagent",
+			Depth:        1,
+		}
+	} else {
+		result.Agent = usage.AgentMeta{
+			AgentKey:     "main",
+			ThreadSource: "user",
+			LabelType:    "main",
+			LabelText:    "메인 턴",
+		}
+		for toolUseID, agentID := range agentByToolUse {
+			input := taskByToolUse[toolUseID]
+			result.AgentLabels = append(result.AgentLabels, usage.AgentLabel{
+				AgentKey:  agentID,
+				LabelType: strings.TrimSpace(input.SubagentType),
+				LabelText: strings.TrimSpace(input.Description),
+			})
+		}
+	}
+	return result, nil
+}
+
+func decodeContentBlocks(raw json.RawMessage) []contentBlock {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '[' {
+		return nil
+	}
+	var blocks []contentBlock
+	if err := json.Unmarshal(trimmed, &blocks); err != nil {
+		return nil
+	}
+	return blocks
+}
+
+func extractAgentID(raw json.RawMessage) string {
+	match := agentIDPattern.FindSubmatch(raw)
+	if len(match) < 2 {
+		return ""
+	}
+	return string(match[1])
 }
 
 func linkedUserPromptCount(entries []usageEntry, recordsByUUID map[string]record, fallbackUserPromptCount int) int {

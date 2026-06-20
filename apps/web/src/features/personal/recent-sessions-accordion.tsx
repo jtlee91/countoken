@@ -165,6 +165,48 @@ export function RecentSessionsAccordion({
                     </dd>
                   </div>
                 </dl>
+                {session.agents.filter((agent) => agent.agentKey !== "main")
+                  .length > 0 ? (
+                  <div className="mt-3 border-t border-border pt-2.5">
+                    <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.04em] text-muted">
+                      서브에이전트{" "}
+                      {
+                        session.agents.filter(
+                          (agent) => agent.agentKey !== "main",
+                        ).length
+                      }
+                    </p>
+                    <ul className="space-y-1.5">
+                      {session.agents.map((agent) => (
+                        <li
+                          key={agent.agentKey}
+                          className="flex items-center gap-2 text-xs font-bold"
+                          style={{
+                            paddingLeft: `${Math.min(agent.depth, 3) * 12}px`,
+                          }}
+                        >
+                          <span
+                            className="min-w-0 flex-1 truncate text-foreground"
+                            title={agent.labelText || undefined}
+                          >
+                            {agent.labelText ||
+                              (agent.agentKey === "main"
+                                ? "메인 턴"
+                                : "서브에이전트")}
+                          </span>
+                          {agent.labelType ? (
+                            <span className="shrink-0 rounded-[5px] bg-surface-alt px-1.5 py-px text-[10px] font-black text-muted">
+                              {agent.labelType}
+                            </span>
+                          ) : null}
+                          <span className="shrink-0 font-mono font-black text-foreground">
+                            {formatTokenAmount(agent.totalTokens)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

@@ -57,10 +57,11 @@ type syncResult struct {
 }
 
 type syncPayload struct {
-	Device   remoteDeviceItem         `json:"device"`
-	Daily    []remoteDailyUsageItem   `json:"daily"`
-	Sessions []remoteSessionUsageItem `json:"sessions"`
-	Agents   []remoteSessionAgentItem `json:"agents,omitempty"`
+	Device           remoteDeviceItem             `json:"device"`
+	Daily            []remoteDailyUsageItem       `json:"daily"`
+	Sessions         []remoteSessionUsageItem     `json:"sessions"`
+	Agents           []remoteSessionAgentItem     `json:"agents,omitempty"`
+	SessionInventory []remoteSessionInventoryItem `json:"session_inventory,omitempty"`
 }
 
 type remoteDeviceItem struct {
@@ -112,6 +113,11 @@ type remoteSessionAgentItem struct {
 	StartedAt      string `json:"started_at"`
 	EndedAt        string `json:"ended_at"`
 	LocalUpdatedAt string `json:"local_updated_at"`
+}
+
+type remoteSessionInventoryItem struct {
+	SessionHash string `json:"session_hash"`
+	Provider    string `json:"provider"`
 }
 
 func main() {
@@ -318,6 +324,10 @@ func runSync(args []string, stdout io.Writer) error {
 	if err != nil {
 		return err
 	}
+	allSessions, err := store.ListSessions(ctx)
+	if err != nil {
+		return err
+	}
 
 	resolvedEndpoint := *endpoint
 	resolvedToken := *token
@@ -335,7 +345,7 @@ func runSync(args []string, stdout io.Writer) error {
 		resolvedEndpoint = defaultSyncEndpoint
 	}
 
-	payload := buildSyncPayload(device, daily, sessions, agents)
+	payload := buildSyncPayload(device, daily, sessions, agents, allSessions)
 	if err := postSyncPayload(ctx, resolvedEndpoint, resolvedToken, payload); err != nil {
 		return err
 	}
@@ -366,16 +376,17 @@ func getenvDefault(name string, fallback string) string {
 	return fallback
 }
 
-func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, sessions []state.SessionRow, agents []state.SessionAgentRow) syncPayload {
+func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, sessions []state.SessionRow, agents []state.SessionAgentRow, inventory []state.SessionRow) syncPayload {
 	payload := syncPayload{
 		Device: remoteDeviceItem{
 			DeviceID:    device.DeviceID,
 			DeviceLabel: device.DeviceLabel,
 			Platform:    device.Platform,
 		},
-		Daily:    make([]remoteDailyUsageItem, 0, len(daily)),
-		Sessions: make([]remoteSessionUsageItem, 0, len(sessions)),
-		Agents:   make([]remoteSessionAgentItem, 0, len(agents)),
+		Daily:            make([]remoteDailyUsageItem, 0, len(daily)),
+		Sessions:         make([]remoteSessionUsageItem, 0, len(sessions)),
+		Agents:           make([]remoteSessionAgentItem, 0, len(agents)),
+		SessionInventory: make([]remoteSessionInventoryItem, 0, len(inventory)),
 	}
 	for _, row := range daily {
 		payload.Daily = append(payload.Daily, remoteDailyUsageItem{
@@ -423,6 +434,12 @@ func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, ses
 			StartedAt:      row.StartedAt,
 			EndedAt:        row.EndedAt,
 			LocalUpdatedAt: row.UpdatedAt,
+		})
+	}
+	for _, row := range inventory {
+		payload.SessionInventory = append(payload.SessionInventory, remoteSessionInventoryItem{
+			SessionHash: row.SessionHash,
+			Provider:    row.Provider,
 		})
 	}
 	return payload

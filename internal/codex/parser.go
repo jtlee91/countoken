@@ -39,12 +39,12 @@ type tokenInfo struct {
 }
 
 type sessionPayload struct {
-	ID             string          `json:"id"`
-	ParentThreadID string          `json:"parent_thread_id"`
-	ForkedFromID   string          `json:"forked_from_id"`
-	ThreadSource   string          `json:"thread_source"`
-	AgentRole      string          `json:"agent_role"`
-	AgentNickname  string          `json:"agent_nickname"`
+	ID             string `json:"id"`
+	ParentThreadID string `json:"parent_thread_id"`
+	ForkedFromID   string `json:"forked_from_id"`
+	ThreadSource   string `json:"thread_source"`
+	AgentRole      string `json:"agent_role"`
+	AgentNickname  string `json:"agent_nickname"`
 	// Source is "cli"/"tui" (a bare string) for user sessions and an object
 	// ({"subagent": {...}}) for subagent threads, so decode it lazily.
 	Source json.RawMessage `json:"source"`
@@ -123,8 +123,10 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 			if err != nil {
 				return SessionUsage{}, err
 			}
-			meta = parsedMeta
-			rawSessionID = parsedMeta.id
+			if rawSessionID == "" {
+				meta = parsedMeta
+				rawSessionID = parsedMeta.id
+			}
 		case "event_msg":
 			eventType, lastUsage, hasLastUsage, err := readEventPayload(current.Payload)
 			if err != nil {

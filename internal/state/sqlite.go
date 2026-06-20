@@ -36,7 +36,10 @@ import (
 // v6: a spawn is only recorded when a bare "agentId: …" string has a matching
 // Agent/Task tool_use, so agent ids echoed in shell output aren't mistaken for
 // real subagents (which created empty 0-token agent rows).
-const parserVersion = 6
+//
+// v7: Codex session files can contain nested/forked session_meta records after
+// the file's own first session_meta; keep the first meta as the file identity.
+const parserVersion = 7
 
 type Store struct {
 	db *sql.DB
@@ -768,10 +771,10 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 		if r.oldHash == r.newHash {
 			continue
 		}
-		if _, err := tx.ExecContext(ctx, `update usage_calls set session_hash = ? where provider = ? and session_hash = ?`, r.newHash, provider, r.oldHash); err != nil {
+		if err := mergeUsageCallsIntoSession(ctx, tx, provider, r.oldHash, r.newHash); err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `update session_agents set session_hash = ? where provider = ? and session_hash = ?`, r.newHash, provider, r.oldHash); err != nil {
+		if err := mergeSessionAgentsIntoSession(ctx, tx, provider, r.oldHash, r.newHash); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `update source_files set session_hash = ? where provider = ? and session_hash = ?`, r.newHash, provider, r.oldHash); err != nil {
@@ -801,6 +804,117 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 		}
 	}
 	return tx.Commit()
+}
+
+func mergeUsageCallsIntoSession(ctx context.Context, tx *sql.Tx, provider string, oldHash string, newHash string) error {
+	if _, err := tx.ExecContext(ctx, `
+		insert into usage_calls (
+			provider,
+			session_hash,
+			call_key,
+			call_index,
+			occurred_at,
+			model,
+			input_tokens,
+			output_tokens,
+			cache_tokens,
+			source_file_key,
+			updated_at
+		)
+		select
+			provider,
+			?,
+			call_key,
+			call_index,
+			occurred_at,
+			model,
+			input_tokens,
+			output_tokens,
+			cache_tokens,
+			source_file_key,
+			updated_at
+		from usage_calls
+		where provider = ? and session_hash = ?
+		on conflict(provider, session_hash, call_key) do update set
+			call_index = excluded.call_index,
+			occurred_at = excluded.occurred_at,
+			model = excluded.model,
+			input_tokens = excluded.input_tokens,
+			output_tokens = excluded.output_tokens,
+			cache_tokens = excluded.cache_tokens,
+			source_file_key = excluded.source_file_key,
+			updated_at = excluded.updated_at
+	`, newHash, provider, oldHash); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `
+		delete from usage_calls
+		where provider = ? and session_hash = ?
+	`, provider, oldHash)
+	return err
+}
+
+func mergeSessionAgentsIntoSession(ctx context.Context, tx *sql.Tx, provider string, oldHash string, newHash string) error {
+	if _, err := tx.ExecContext(ctx, `
+		insert into session_agents (
+			provider,
+			session_hash,
+			agent_key,
+			parent_agent_key,
+			depth,
+			label_type,
+			label_text,
+			input_tokens,
+			output_tokens,
+			cache_tokens,
+			llm_call_count,
+			user_turn_count,
+			started_at,
+			ended_at,
+			source_file_key,
+			updated_at
+		)
+		select
+			provider,
+			?,
+			agent_key,
+			parent_agent_key,
+			depth,
+			label_type,
+			label_text,
+			input_tokens,
+			output_tokens,
+			cache_tokens,
+			llm_call_count,
+			user_turn_count,
+			started_at,
+			ended_at,
+			source_file_key,
+			updated_at
+		from session_agents
+		where provider = ? and session_hash = ?
+		on conflict(provider, session_hash, agent_key) do update set
+			parent_agent_key = case when excluded.parent_agent_key != '' then excluded.parent_agent_key else session_agents.parent_agent_key end,
+			depth = case when excluded.depth != 0 then excluded.depth else session_agents.depth end,
+			label_type = case when excluded.label_type != '' then excluded.label_type else session_agents.label_type end,
+			label_text = case when excluded.label_text != '' then excluded.label_text else session_agents.label_text end,
+			input_tokens = excluded.input_tokens,
+			output_tokens = excluded.output_tokens,
+			cache_tokens = excluded.cache_tokens,
+			llm_call_count = excluded.llm_call_count,
+			user_turn_count = excluded.user_turn_count,
+			started_at = excluded.started_at,
+			ended_at = excluded.ended_at,
+			source_file_key = excluded.source_file_key,
+			updated_at = excluded.updated_at
+	`, newHash, provider, oldHash); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `
+		delete from session_agents
+		where provider = ? and session_hash = ?
+	`, provider, oldHash)
+	return err
 }
 
 // ResolveAgentDepths computes each agent's nesting depth from the spawn chain.

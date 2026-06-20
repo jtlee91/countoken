@@ -55,12 +55,18 @@ type SessionAgent = {
   local_updated_at: string;
 };
 
+type SessionInventoryItem = {
+  session_hash: string;
+  provider: Provider;
+};
+
 type SyncPayload = {
   user_id?: string;
   device: SyncDevice;
   daily: DailyUsage[];
   sessions?: SessionUsage[];
   agents?: SessionAgent[];
+  session_inventory?: SessionInventoryItem[];
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -166,6 +172,14 @@ function isSessionAgent(value: unknown): value is SessionAgent {
     typeof item.local_updated_at === "string";
 }
 
+function isSessionInventoryItem(value: unknown): value is SessionInventoryItem {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return isNonEmptyString(item.session_hash) &&
+    item.session_hash.length <= 128 &&
+    isProvider(item.provider);
+}
+
 function parsePayload(value: unknown): SyncPayload | null {
   if (!value || typeof value !== "object") return null;
   const payload = value as Record<string, unknown>;
@@ -183,8 +197,25 @@ function parsePayload(value: unknown): SyncPayload | null {
     if (payload.agents.length > 20000) return null;
     if (!payload.agents.every(isSessionAgent)) return null;
   }
+  if (payload.session_inventory !== undefined) {
+    if (!Array.isArray(payload.session_inventory)) return null;
+    if (payload.session_inventory.length > 20000) return null;
+    if (!payload.session_inventory.every(isSessionInventoryItem)) return null;
+  }
 
   return payload as SyncPayload;
+}
+
+function unique<T>(values: T[]): T[] {
+  return [...new Set(values)];
+}
+
+function chunks<T>(values: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
+  }
+  return result;
 }
 
 Deno.serve(async (req: Request) => {
@@ -331,6 +362,19 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ daily_upserted: 0, sessions_upserted: 0, agents_upserted: 0 });
   }
 
+  const touchedSessionHashes = unique(sessionRows.map((session) => session.session_hash));
+  for (const hashChunk of chunks(touchedSessionHashes, 200)) {
+    const { error: staleAgentError } = await supabase
+      .from("usage_session_agents")
+      .delete()
+      .eq("user_id", userID)
+      .in("session_hash", hashChunk);
+
+    if (staleAgentError) {
+      return jsonResponse({ error: "database_error", detail: staleAgentError.message }, 500);
+    }
+  }
+
   if (sessionRows.length > 0) {
     const { error: sessionError } = await supabase
       .from("usage_sessions")
@@ -358,6 +402,58 @@ Deno.serve(async (req: Request) => {
 
     if (dailyError) {
       return jsonResponse({ error: "database_error", detail: dailyError.message }, 500);
+    }
+  }
+
+  const inventory = payload.session_inventory ?? [];
+  const inventoryByProvider = new Map<Provider, Set<string>>();
+  for (const item of inventory) {
+    const hashes = inventoryByProvider.get(item.provider) ?? new Set<string>();
+    hashes.add(item.session_hash);
+    inventoryByProvider.set(item.provider, hashes);
+  }
+
+  for (const [provider, localHashes] of inventoryByProvider) {
+    let staleQuery = supabase
+      .from("usage_sessions")
+      .select("session_hash")
+      .eq("user_id", userID)
+      .eq("device_id", payload.device.device_id)
+      .eq("provider", provider);
+
+    if (localHashes.size > 0) {
+      staleQuery = staleQuery.not("session_hash", "in", `(${[...localHashes].join(",")})`);
+    }
+
+    const { data: staleSessions, error: staleLookupError } = await staleQuery;
+    if (staleLookupError) {
+      return jsonResponse({ error: "database_error", detail: staleLookupError.message }, 500);
+    }
+
+    const staleHashes = unique((staleSessions ?? []).map((session) => session.session_hash as string));
+    for (const hashChunk of chunks(staleHashes, 200)) {
+      const { error: staleAgentDeleteError } = await supabase
+        .from("usage_session_agents")
+        .delete()
+        .eq("user_id", userID)
+        .eq("provider", provider)
+        .in("session_hash", hashChunk);
+
+      if (staleAgentDeleteError) {
+        return jsonResponse({ error: "database_error", detail: staleAgentDeleteError.message }, 500);
+      }
+
+      const { error: staleSessionDeleteError } = await supabase
+        .from("usage_sessions")
+        .delete()
+        .eq("user_id", userID)
+        .eq("device_id", payload.device.device_id)
+        .eq("provider", provider)
+        .in("session_hash", hashChunk);
+
+      if (staleSessionDeleteError) {
+        return jsonResponse({ error: "database_error", detail: staleSessionDeleteError.message }, 500);
+      }
     }
   }
 

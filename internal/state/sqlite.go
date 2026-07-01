@@ -49,6 +49,10 @@ import (
 // so the shared calls dedupe on merge.
 const parserVersion = 8
 
+// ParserVersion exposes the current parsing-logic version so the CLI can report
+// it to the sync server (per-device), making a rollout's reach observable.
+const ParserVersion = parserVersion
+
 type Store struct {
 	db *sql.DB
 }

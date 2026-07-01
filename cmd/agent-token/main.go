@@ -65,9 +65,11 @@ type syncPayload struct {
 }
 
 type remoteDeviceItem struct {
-	DeviceID    string `json:"device_id"`
-	DeviceLabel string `json:"device_label"`
-	Platform    string `json:"platform"`
+	DeviceID      string `json:"device_id"`
+	DeviceLabel   string `json:"device_label"`
+	Platform      string `json:"platform"`
+	AgentVersion  string `json:"agent_version"`
+	ParserVersion int    `json:"parser_version"`
 }
 
 type remoteDailyUsageItem struct {
@@ -379,9 +381,11 @@ func getenvDefault(name string, fallback string) string {
 func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, sessions []state.SessionRow, agents []state.SessionAgentRow, inventory []state.SessionRow) syncPayload {
 	payload := syncPayload{
 		Device: remoteDeviceItem{
-			DeviceID:    device.DeviceID,
-			DeviceLabel: device.DeviceLabel,
-			Platform:    device.Platform,
+			DeviceID:      device.DeviceID,
+			DeviceLabel:   device.DeviceLabel,
+			Platform:      device.Platform,
+			AgentVersion:  version,
+			ParserVersion: state.ParserVersion,
 		},
 		Daily:            make([]remoteDailyUsageItem, 0, len(daily)),
 		Sessions:         make([]remoteSessionUsageItem, 0, len(sessions)),

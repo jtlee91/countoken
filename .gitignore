@@ -29,3 +29,6 @@ apps/web/next-env.d.ts
 .vercel
 .env*.local
 supabase/.temp/
+
+# Playwright MCP scratch output
+.playwright-mcp/

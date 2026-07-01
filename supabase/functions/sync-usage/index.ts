@@ -8,6 +8,8 @@ type SyncDevice = {
   device_id: string;
   device_label: string;
   platform: Platform;
+  agent_version?: string;
+  parser_version?: number;
 };
 
 type DailyUsage = {
@@ -103,7 +105,12 @@ function isSyncDevice(value: unknown): value is SyncDevice {
     typeof item.device_label === "string" &&
     item.device_label.trim().length > 0 &&
     item.device_label.length <= 120 &&
-    isPlatform(item.platform);
+    isPlatform(item.platform) &&
+    // Optional version fields: absent on older clients, validated when present.
+    (item.agent_version === undefined ||
+      (typeof item.agent_version === "string" && item.agent_version.length <= 40)) &&
+    (item.parser_version === undefined ||
+      (typeof item.parser_version === "number" && Number.isInteger(item.parser_version)));
 }
 
 function isUsageDate(value: unknown): value is string {
@@ -282,6 +289,8 @@ Deno.serve(async (req: Request) => {
       .from("usage_devices")
       .update({
         platform: payload.device.platform,
+        agent_version: payload.device.agent_version ?? null,
+        parser_version: payload.device.parser_version ?? null,
         last_seen_at: syncedAt,
       })
       .eq("user_id", userID)
@@ -298,6 +307,8 @@ Deno.serve(async (req: Request) => {
         device_id: payload.device.device_id,
         device_label: payload.device.device_label.trim(),
         platform: payload.device.platform,
+        agent_version: payload.device.agent_version ?? null,
+        parser_version: payload.device.parser_version ?? null,
         last_seen_at: syncedAt,
       });
 

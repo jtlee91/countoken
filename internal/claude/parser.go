@@ -100,6 +100,7 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 
 	var summary SessionSummary
 	var rawSessionID string
+	var rootUUID string
 	var usageEntries []usageEntry
 	recordsByUUID := map[string]record{}
 	var userPromptCount int
@@ -126,6 +127,13 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 		}
 		if rawSessionID == "" {
 			rawSessionID = strings.TrimSpace(current.SessionID)
+		}
+		// The conversation's first real (non-sidechain) message uuid identifies the
+		// logical session across resumed/background twin files, which re-contain the
+		// transcript under a new sessionId but keep the original uuids.
+		if rootUUID == "" && !current.IsSidechain && current.UUID != "" &&
+			(current.Type == "user" || current.Type == "assistant") {
+			rootUUID = strings.TrimSpace(current.UUID)
 		}
 		if current.UUID != "" {
 			recordsByUUID[current.UUID] = current
@@ -212,13 +220,23 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 	}
 	for index := range calls {
 		entry := deduped[index]
-		calls[index].CallKey = usage.HashCallKey("claude", summary.SessionHash, entry.RequestID, entry.MessageID, entry.UUID, fmt.Sprintf("%d", calls[index].CallIndex))
+		// The call key is derived from the message identity alone (not the
+		// session_hash) so the same LLM call appearing in twin session files
+		// collapses to one row when those sessions are merged. Fall back to the
+		// call index only when no message identity is present, to keep distinct
+		// unidentifiable calls within a file from colliding.
+		idParts := []string{entry.RequestID, entry.MessageID, entry.UUID}
+		if entry.RequestID == "" && entry.MessageID == "" && entry.UUID == "" {
+			idParts = append(idParts, fmt.Sprintf("%d", calls[index].CallIndex))
+		}
+		calls[index].CallKey = usage.HashCallKey("claude", "", idParts...)
 	}
 
 	result := SessionUsage{
 		Summary:      summary,
 		Calls:        calls,
 		OwnSessionID: rawSessionID,
+		RootUUID:     rootUUID,
 	}
 	ownAgentKey := "main"
 	if strings.Contains(filepath.ToSlash(path), "/subagents/") || fileAgentID != "" {

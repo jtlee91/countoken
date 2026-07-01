@@ -531,6 +531,14 @@ func inspectProvider(provider string, root string, stateDir string, parseSession
 	if err := store.ResolveSessionRoots(ctx, provider); err != nil {
 		return inspectResult{}, err
 	}
+	// Fold Claude twin sessions (a resumed session or background "bg" mirror gets a
+	// new sessionId but re-contains the transcript) back into one session. No-op
+	// for Codex.
+	if provider == "claude" {
+		if err := store.ResolveClaudeTwins(ctx); err != nil {
+			return inspectResult{}, err
+		}
+	}
 	// Reconstruct Claude subagent nesting depth from the spawn chain.
 	if err := store.ResolveAgentDepths(ctx, provider); err != nil {
 		return inspectResult{}, err

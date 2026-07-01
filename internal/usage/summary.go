@@ -22,6 +22,14 @@ type SessionUsage struct {
 	OwnSessionID    string
 	ParentSessionID string
 
+	// RootUUID is the uuid of the conversation's first (non-sidechain) message.
+	// Claude re-contains the whole transcript when a session is resumed or
+	// mirrored to a background ("bg") session, minting a new sessionId but
+	// preserving message uuids; twin files therefore share this root uuid, which
+	// lets us fold them back into one logical session. Empty for subagent files
+	// (all sidechain) and for Codex.
+	RootUUID string
+
 	// AgentLabels are labels this file knows about *other* agents in the same
 	// session. Claude's main file carries the Task-call map (agentId →
 	// subagent_type/description); the subagent file itself has no label.

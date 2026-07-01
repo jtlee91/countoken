@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -39,7 +40,14 @@ import (
 //
 // v7: Codex session files can contain nested/forked session_meta records after
 // the file's own first session_meta; keep the first meta as the file identity.
-const parserVersion = 7
+//
+// v8: Claude twin sessions — a resumed session or a background ("bg") mirror is
+// written as a new file with a new sessionId but re-contains the whole
+// transcript, so it was double-counted as a separate session. Twin files share
+// the conversation's first message uuid (root_uuid) and are now folded onto one
+// session_hash; Claude call keys are message-identity based (not session scoped)
+// so the shared calls dedupe on merge.
+const parserVersion = 8
 
 type Store struct {
 	db *sql.DB
@@ -564,8 +572,9 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 			session_hash,
 			last_parsed_at,
 			own_session_id,
-			parent_session_id
-		) values (?, ?, ?, ?, ?, ?, ?, ?)
+			parent_session_id,
+			root_uuid
+		) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		on conflict(file_key) do update set
 			provider = excluded.provider,
 			size_bytes = excluded.size_bytes,
@@ -573,8 +582,9 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 			session_hash = excluded.session_hash,
 			last_parsed_at = excluded.last_parsed_at,
 			own_session_id = excluded.own_session_id,
-			parent_session_id = excluded.parent_session_id
-	`, fileKey, provider, sizeBytes, modifiedAt, parsed.Summary.SessionHash, now, parsed.OwnSessionID, parsed.ParentSessionID); err != nil {
+			parent_session_id = excluded.parent_session_id,
+			root_uuid = excluded.root_uuid
+	`, fileKey, provider, sizeBytes, modifiedAt, parsed.Summary.SessionHash, now, parsed.OwnSessionID, parsed.ParentSessionID, parsed.RootUUID); err != nil {
 		return err
 	}
 
@@ -915,6 +925,134 @@ func mergeSessionAgentsIntoSession(ctx context.Context, tx *sql.Tx, provider str
 		where provider = ? and session_hash = ?
 	`, provider, oldHash)
 	return err
+}
+
+// ResolveClaudeTwins folds Claude sessions that are the same conversation split
+// across multiple session files onto one session_hash. When a session is resumed
+// or mirrored to a background ("bg") session, Claude writes a new file with a new
+// sessionId that re-contains the whole transcript, which otherwise shows up as a
+// duplicate session with near-identical totals. Twin files share the
+// conversation's first message uuid (root_uuid); files in the same group are
+// merged onto the lexicographically smallest session_hash, and the shared LLM
+// calls dedupe because Claude call keys are message-identity based, not session
+// scoped. No-op for files without a root_uuid (subagent files, which are already
+// attached to their parent via a shared sessionId) and for other providers.
+func (store *Store) ResolveClaudeTwins(ctx context.Context) error {
+	const provider = "claude"
+	rows, err := store.db.QueryContext(ctx, `
+		select distinct root_uuid, session_hash
+		from source_files
+		where provider = ? and root_uuid != ''
+	`, provider)
+	if err != nil {
+		return err
+	}
+	hashesByRoot := map[string][]string{}
+	seen := map[string]map[string]struct{}{}
+	for rows.Next() {
+		var root, hash string
+		if err := rows.Scan(&root, &hash); err != nil {
+			rows.Close()
+			return err
+		}
+		if seen[root] == nil {
+			seen[root] = map[string]struct{}{}
+		}
+		if _, ok := seen[root][hash]; ok {
+			continue
+		}
+		seen[root][hash] = struct{}{}
+		hashesByRoot[root] = append(hashesByRoot[root], hash)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	type remap struct{ oldHash, newHash string }
+	var remaps []remap
+	canonical := map[string]struct{}{}
+	for _, hashes := range hashesByRoot {
+		if len(hashes) < 2 {
+			continue
+		}
+		sort.Strings(hashes)
+		root := hashes[0]
+		canonical[root] = struct{}{}
+		for _, h := range hashes[1:] {
+			remaps = append(remaps, remap{oldHash: h, newHash: root})
+		}
+	}
+	if len(remaps) == 0 {
+		return nil
+	}
+
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	now := time.Now().In(kst).Format(time.RFC3339Nano)
+
+	for _, r := range remaps {
+		if r.oldHash == r.newHash {
+			continue
+		}
+		// Carry the human-turn count forward before the source session is dropped;
+		// it can't be recomputed from usage_calls, and twins share the same turns.
+		if _, err := tx.ExecContext(ctx, `
+			update sessions set user_turn_count = max(
+				user_turn_count,
+				coalesce((select user_turn_count from sessions where session_hash = ?), 0)
+			)
+			where session_hash = ?
+		`, r.oldHash, r.newHash); err != nil {
+			return err
+		}
+		if err := mergeUsageCallsIntoSession(ctx, tx, provider, r.oldHash, r.newHash); err != nil {
+			return err
+		}
+		if err := mergeSessionAgentsIntoSession(ctx, tx, provider, r.oldHash, r.newHash); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `update source_files set session_hash = ? where provider = ? and session_hash = ?`, r.newHash, provider, r.oldHash); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `delete from sessions where provider = ? and session_hash = ?`, provider, r.oldHash); err != nil {
+			return err
+		}
+	}
+
+	// Recompute each merged session's totals from the deduped usage_calls, and
+	// rebuild its main agent row as the session total minus its subagents so the
+	// expandable breakdown still sums to the header.
+	for rootHash := range canonical {
+		if _, err := tx.ExecContext(ctx, `
+			update sessions set
+				input_tokens = (select coalesce(sum(input_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
+				output_tokens = (select coalesce(sum(output_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
+				cache_tokens = (select coalesce(sum(cache_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
+				llm_call_count = (select count(*) from usage_calls where provider = ? and session_hash = ?),
+				started_at = coalesce((select min(occurred_at) from usage_calls where provider = ? and session_hash = ?), started_at),
+				ended_at = coalesce((select max(occurred_at) from usage_calls where provider = ? and session_hash = ?), ended_at),
+				updated_at = ?, need_sync = 1, synced_at = null
+			where provider = ? and session_hash = ?
+		`, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, now, provider, rootHash); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `
+			update session_agents set
+				input_tokens = max(0, (select input_tokens from sessions where session_hash = ?) - coalesce((select sum(input_tokens) from session_agents where provider = ? and session_hash = ? and agent_key != 'main'), 0)),
+				output_tokens = max(0, (select output_tokens from sessions where session_hash = ?) - coalesce((select sum(output_tokens) from session_agents where provider = ? and session_hash = ? and agent_key != 'main'), 0)),
+				cache_tokens = max(0, (select cache_tokens from sessions where session_hash = ?) - coalesce((select sum(cache_tokens) from session_agents where provider = ? and session_hash = ? and agent_key != 'main'), 0)),
+				llm_call_count = max(0, (select llm_call_count from sessions where session_hash = ?) - coalesce((select sum(llm_call_count) from session_agents where provider = ? and session_hash = ? and agent_key != 'main'), 0)),
+				updated_at = ?
+			where provider = ? and session_hash = ? and agent_key = 'main'
+		`, rootHash, provider, rootHash, rootHash, provider, rootHash, rootHash, provider, rootHash, rootHash, provider, rootHash, now, provider, rootHash); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // ResolveAgentDepths computes each agent's nesting depth from the spawn chain.
@@ -1268,7 +1406,7 @@ func (store *Store) ensureSessionSyncColumns(ctx context.Context) error {
 // Codex subagent files (separate session ids) up to their root parent. They are
 // empty for older rows until re-parsed (the parserVersion bump forces that).
 func (store *Store) ensureSourceFileLinkageColumns(ctx context.Context) error {
-	for _, column := range []string{"own_session_id", "parent_session_id"} {
+	for _, column := range []string{"own_session_id", "parent_session_id", "root_uuid"} {
 		hasColumn, err := store.tableHasColumn(ctx, "source_files", column)
 		if err != nil {
 			return err

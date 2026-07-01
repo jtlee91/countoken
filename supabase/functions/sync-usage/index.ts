@@ -425,23 +425,39 @@ Deno.serve(async (req: Request) => {
   }
 
   for (const [provider, localHashes] of inventoryByProvider) {
-    let staleQuery = supabase
-      .from("usage_sessions")
-      .select("session_hash")
-      .eq("user_id", userID)
-      .eq("device_id", payload.device.device_id)
-      .eq("provider", provider);
+    // Fetch every existing hash for this device/provider and diff it against the
+    // local inventory in memory. We deliberately avoid a `not.in.(...)` filter:
+    // it inlines every local hash into the request URL, which overflows the URL
+    // length limit once a provider accumulates many sessions (TypeError: Invalid
+    // URL). We page through results so PostgREST's max-rows cap can't silently
+    // truncate the set and leave stale rows behind.
+    const existingHashes: string[] = [];
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data: existingPage, error: staleLookupError } = await supabase
+        .from("usage_sessions")
+        .select("session_hash")
+        .eq("user_id", userID)
+        .eq("device_id", payload.device.device_id)
+        .eq("provider", provider)
+        .range(from, from + pageSize - 1);
 
-    if (localHashes.size > 0) {
-      staleQuery = staleQuery.not("session_hash", "in", `(${[...localHashes].join(",")})`);
+      if (staleLookupError) {
+        return jsonResponse({ error: "database_error", detail: staleLookupError.message }, 500);
+      }
+
+      const page = existingPage ?? [];
+      for (const session of page) {
+        existingHashes.push(session.session_hash as string);
+      }
+      if (page.length < pageSize) {
+        break;
+      }
     }
 
-    const { data: staleSessions, error: staleLookupError } = await staleQuery;
-    if (staleLookupError) {
-      return jsonResponse({ error: "database_error", detail: staleLookupError.message }, 500);
-    }
-
-    const staleHashes = unique((staleSessions ?? []).map((session) => session.session_hash as string));
+    const staleHashes = unique(
+      existingHashes.filter((hash) => !localHashes.has(hash)),
+    );
     for (const hashChunk of chunks(staleHashes, 200)) {
       const { error: staleAgentDeleteError } = await supabase
         .from("usage_session_agents")

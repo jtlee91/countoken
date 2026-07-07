@@ -732,7 +732,7 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 // empty), so every node is its own root and this is a no-op for them.
 func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) error {
 	rows, err := store.db.QueryContext(ctx, `
-		select own_session_id, parent_session_id
+		select own_session_id, parent_session_id, session_hash
 		from source_files
 		where provider = ? and own_session_id != ''
 	`, provider)
@@ -740,10 +740,11 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 		return err
 	}
 	parent := map[string]string{}
+	currentHash := map[string]string{}
 	var owns []string
 	for rows.Next() {
-		var own, par string
-		if err := rows.Scan(&own, &par); err != nil {
+		var own, par, hash string
+		if err := rows.Scan(&own, &par, &hash); err != nil {
 			rows.Close()
 			return err
 		}
@@ -751,6 +752,7 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 			owns = append(owns, own)
 		}
 		parent[own] = strings.TrimSpace(par)
+		currentHash[own] = hash
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
@@ -759,15 +761,23 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 
 	type remap struct{ oldHash, newHash string }
 	var remaps []remap
-	roots := map[string]struct{}{}
+	affectedRoots := map[string]struct{}{}
 	for _, own := range owns {
 		root := resolveRoot(own, parent)
-		roots[usage.HashSessionID(provider, root)] = struct{}{}
 		if root != own {
+			newHash := usage.HashSessionID(provider, root)
+			oldHash := currentHash[own]
+			if oldHash == "" {
+				oldHash = usage.HashSessionID(provider, own)
+			}
+			if oldHash == newHash {
+				continue
+			}
 			remaps = append(remaps, remap{
-				oldHash: usage.HashSessionID(provider, own),
-				newHash: usage.HashSessionID(provider, root),
+				oldHash: oldHash,
+				newHash: newHash,
 			})
+			affectedRoots[newHash] = struct{}{}
 		}
 	}
 	if len(remaps) == 0 {
@@ -802,7 +812,7 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 	// Recompute token/call/time aggregates for each affected root from usage_calls.
 	// user_turn_count is left as the root's own human-prompt count (subagents
 	// receive prompts but add no human turns to the rolled-up session).
-	for rootHash := range roots {
+	for rootHash := range affectedRoots {
 		if _, err := tx.ExecContext(ctx, `
 			update sessions set
 				input_tokens = (select coalesce(sum(input_tokens), 0) from usage_calls where provider = ? and session_hash = ?),

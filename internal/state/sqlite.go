@@ -47,7 +47,12 @@ import (
 // the conversation's first message uuid (root_uuid) and are now folded onto one
 // session_hash; Claude call keys are message-identity based (not session scoped)
 // so the shared calls dedupe on merge.
-const parserVersion = 8
+//
+// v9: Codex fork replay — a child rollout can prepend copied parent history with
+// rewritten record timestamps. Only events after the child's own UUIDv7 turn
+// boundary are counted, and repeated cumulative token snapshots are normalized
+// before calls are emitted.
+const parserVersion = 9
 
 // ParserVersion exposes the current parsing-logic version so the CLI can report
 // it to the sync server (per-device), making a rollout's reach observable.

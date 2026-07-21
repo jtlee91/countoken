@@ -26,6 +26,7 @@ var updateHTTPClient = &http.Client{Timeout: 8 * time.Second}
 // manual) and checks at most once per updateCheckInterval — there is no
 // background daemon or scheduler.
 func maybeSelfUpdate(stateDir string) {
+	cleanupPreviousBinary()
 	if version == "dev" {
 		return // unversioned local/dev build
 	}
@@ -89,9 +90,13 @@ func replaceRunningBinary() error {
 		exe = resolved
 	}
 
+	suffix := ""
+	if runtime.GOOS == "windows" {
+		suffix = ".exe"
+	}
 	assetURL := fmt.Sprintf(
-		"https://github.com/%s/releases/latest/download/token-agent-%s-%s",
-		updateRepo, runtime.GOOS, runtime.GOARCH,
+		"https://github.com/%s/releases/latest/download/token-agent-%s-%s%s",
+		updateRepo, runtime.GOOS, runtime.GOARCH, suffix,
 	)
 	resp, err := updateHTTPClient.Get(assetURL)
 	if err != nil {
@@ -125,8 +130,36 @@ func replaceRunningBinary() error {
 
 	// Atomic on the same filesystem. Replacing the running executable is safe
 	// on Unix: the current process keeps its open inode and the new binary is
-	// used on the next invocation.
+	// used on the next invocation. On Windows the running .exe is locked
+	// against overwrite but not against rename, so move it aside first; the
+	// leftover .old file is removed by cleanupPreviousBinary on the next run.
+	if runtime.GOOS == "windows" {
+		oldPath := exe + ".old"
+		_ = os.Remove(oldPath)
+		if err := os.Rename(exe, oldPath); err != nil {
+			return err
+		}
+		if err := os.Rename(tmpPath, exe); err != nil {
+			_ = os.Rename(oldPath, exe) // restore so the install stays usable
+			return err
+		}
+		return nil
+	}
 	return os.Rename(tmpPath, exe)
+}
+
+// cleanupPreviousBinary removes the .old binary left behind by a Windows
+// self-update. Best-effort: removal fails while the previous process is still
+// running and succeeds on a later invocation.
+func cleanupPreviousBinary() {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return
+	}
+	_ = os.Remove(exe + ".old")
 }
 
 // isNewerVersion reports whether candidate is a strictly higher semver than

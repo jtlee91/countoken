@@ -43,12 +43,30 @@ func readLinuxMachineID() string {
 	return ""
 }
 
+func readWindowsMachineID() string {
+	output, err := exec.Command(
+		"reg", "query", `HKLM\SOFTWARE\Microsoft\Cryptography`, "/v", "MachineGuid",
+	).Output()
+	if err != nil {
+		return ""
+	}
+	fields := strings.Fields(string(output))
+	for i, f := range fields {
+		if f == "REG_SZ" && i+1 < len(fields) {
+			return fields[i+1]
+		}
+	}
+	return ""
+}
+
 func readMachineID() string {
 	switch runtime.GOOS {
 	case "darwin":
 		return readDarwinMachineID()
 	case "linux":
 		return readLinuxMachineID()
+	case "windows":
+		return readWindowsMachineID()
 	default:
 		return ""
 	}

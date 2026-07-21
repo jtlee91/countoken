@@ -25,6 +25,8 @@ jobs:
           GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/token-agent-darwin-amd64 ./cmd/agent-token
           GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/token-agent-linux-amd64 ./cmd/agent-token
           GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/token-agent-linux-arm64 ./cmd/agent-token
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/token-agent-windows-amd64.exe ./cmd/agent-token
+          GOOS=windows GOARCH=arm64 go build -trimpath -ldflags="${LDFLAGS}" -o dist/token-agent-windows-arm64.exe ./cmd/agent-token
           printf '%s' "${GITHUB_REF_NAME}" > dist/version.txt
       - uses: softprops/action-gh-release@v2
         with:

@@ -11,6 +11,9 @@ function buildInstallPrompt(siteUrl: string) {
 
 1. Run the install script:
    curl -fsSL ${siteUrl}/install.sh | bash
+   On Windows, run this in PowerShell instead:
+   irm ${siteUrl}/install.ps1 | iex
+   (binary path on Windows: %USERPROFILE%\\.countoken\\bin\\token-agent.exe)
    This installs the token-agent binary and hook script under ~/.countoken, and registers a Stop hook for Claude Code (~/.claude/settings.json) and Codex (~/.codex/config.toml). Existing settings are preserved via merge, and re-running is idempotent.
 
 2. Log in (run with a command timeout of at least 6 minutes):
@@ -141,8 +144,7 @@ export function InstallContent() {
         </div>
         <p className="mb-4 text-[13px] font-bold leading-relaxed text-muted">
           바이너리와 hook을 설치하고 Google 로그인 한 번이면 끝.{" "}
-          <b className="text-foreground">macOS &amp; Linux</b> 지원, Windows는
-          준비 중.
+          <b className="text-foreground">macOS, Linux &amp; Windows</b> 지원.
         </p>
 
         <section
@@ -161,7 +163,7 @@ export function InstallContent() {
               <CopyPromptButton text={directCommand} label="명령 복사" />
             </div>
           </div>
-          <div className="relative flex items-start gap-2.5 px-[22px] py-[22px] font-mono text-sm leading-7">
+          <div className="relative flex items-start gap-2.5 px-[22px] pt-[22px] pb-2 font-mono text-sm leading-7">
             <span className="select-none font-bold text-[#4ade80]">$</span>
             <span className="break-words [word-break:keep-all] text-[#d4ddd0]">
               curl -fsSL{" "}
@@ -170,12 +172,21 @@ export function InstallContent() {
               <span className="text-[#7e887b]">&amp;&amp;</span> {BIN_PATH} login
             </span>
           </div>
+          <div className="relative flex items-start gap-2.5 px-[22px] pb-[22px] pt-2 font-mono text-sm leading-7">
+            <span className="select-none font-bold text-[#4ade80]">&gt;</span>
+            <span className="break-words [word-break:keep-all] text-[#d4ddd0]">
+              irm{" "}
+              <span className="text-[#93e6b0]">{siteUrl}/install.ps1</span>{" "}
+              <span className="text-[#7e887b]">|</span> iex{" "}
+              <span className="text-[#7e887b]"># Windows PowerShell</span>
+            </span>
+          </div>
           <div className="flex flex-wrap items-center gap-2 border-t border-[#2a2f26] bg-black/15 px-4 py-2.5">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4ade80]/35 px-2.5 py-1 font-mono text-[11px] font-bold text-[#d4ddd0]">
               <span className="text-token-green">●</span> macOS &amp; Linux
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#2a2f26] px-2.5 py-1 font-mono text-[11px] font-bold text-[#5c6a58]">
-              Windows · 준비 중
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4ade80]/35 px-2.5 py-1 font-mono text-[11px] font-bold text-[#d4ddd0]">
+              <span className="text-token-green">●</span> Windows
             </span>
           </div>
         </section>

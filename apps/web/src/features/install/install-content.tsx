@@ -7,26 +7,26 @@ import { getSiteUrl } from "@/lib/env";
 
 const BIN_PATH = "~/.countoken/bin/token-agent";
 
+const WIN_BIN_PATH = "$env:USERPROFILE\\.countoken\\bin\\token-agent.exe";
+
 function buildInstallPrompt(siteUrl: string) {
-  return `Install the Countoken local token usage tracker on this machine. Follow these steps in order.
+  return `Install the Countoken local token usage tracker on this machine. First detect the OS, then follow these steps in order using the matching command. AGENT_BIN means ${BIN_PATH} on macOS/Linux and & "${WIN_BIN_PATH}" in PowerShell on Windows.
 
 1. Run the install script:
-   curl -fsSL ${siteUrl}/install.sh | bash
-   On Windows, run this in PowerShell instead:
-   irm ${siteUrl}/install.ps1 | iex
-   (binary path on Windows: %USERPROFILE%\\.countoken\\bin\\token-agent.exe)
+   - macOS/Linux: curl -fsSL ${siteUrl}/install.sh | bash
+   - Windows (PowerShell): irm ${siteUrl}/install.ps1 | iex
    This installs the token-agent binary and hook script under ~/.countoken, and registers a Stop hook for Claude Code (~/.claude/settings.json) and Codex (~/.codex/config.toml). Existing settings are preserved via merge, and re-running is idempotent.
 
 2. Log in (run with a command timeout of at least 6 minutes):
-   ${BIN_PATH} login
+   AGENT_BIN login
    This command opens a browser automatically and blocks until login completes. When you start it, tell me to complete the Google login in the browser. If the browser does not open, show me the URL the command printed.
 
 3. Verify the install:
-   ${BIN_PATH} inspect --quiet && ${BIN_PATH} sync --quiet
+   AGENT_BIN inspect --quiet, and if it succeeds, AGENT_BIN sync --quiet
    If both succeed, report "install complete" with a short summary of the device info printed by the login step.
 
 4. Open the dashboard:
-   Open ${siteUrl}/ in the browser (e.g. \`open ${siteUrl}/\` on macOS or \`xdg-open ${siteUrl}/\` on Linux) so I can see my synced token usage right away.
+   Open ${siteUrl}/ in the browser (\`open ${siteUrl}/\` on macOS, \`xdg-open ${siteUrl}/\` on Linux, \`Start-Process ${siteUrl}/\` on Windows) so I can see my synced token usage right away.
 
 Important: never print or store the contents of ~/.countoken/auth.json, access tokens, or any other secret values.`;
 }

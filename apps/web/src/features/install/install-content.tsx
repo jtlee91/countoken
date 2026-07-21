@@ -1,6 +1,7 @@
 import { ShieldCheck } from "lucide-react";
 
 import { CopyPromptButton } from "@/features/install/copy-prompt-button";
+import { DirectInstallCard } from "@/features/install/direct-install-card";
 import { ExpandablePrompt } from "@/features/install/expandable-prompt";
 import { getSiteUrl } from "@/lib/env";
 
@@ -76,7 +77,6 @@ function TermDots() {
 export function InstallContent() {
   const siteUrl = getSiteUrl().replace(/\/$/, "");
   const prompt = buildInstallPrompt(siteUrl);
-  const directCommand = `curl -fsSL ${siteUrl}/install.sh | bash && ${BIN_PATH} login`;
 
   return (
     <div className="space-y-6">
@@ -147,49 +147,7 @@ export function InstallContent() {
           <b className="text-foreground">macOS, Linux &amp; Windows</b> 지원.
         </p>
 
-        <section
-          className="relative overflow-hidden rounded-2xl border border-[#2a2f26] shadow-[0_24px_60px_-28px_rgba(10,20,12,0.55)]"
-          style={TERM_CARD_STYLE}
-        >
-          <div
-            className="relative flex items-center gap-3.5 border-b border-[#2a2f26] px-4 py-3"
-            style={TERM_HEAD_STYLE}
-          >
-            <TermDots />
-            <span className="ml-1 font-mono text-[12.5px] font-bold text-[#7e887b]">
-              install.sh
-            </span>
-            <div className="ml-auto">
-              <CopyPromptButton text={directCommand} label="명령 복사" />
-            </div>
-          </div>
-          <div className="relative flex items-start gap-2.5 px-[22px] pt-[22px] pb-2 font-mono text-sm leading-7">
-            <span className="select-none font-bold text-[#4ade80]">$</span>
-            <span className="break-words [word-break:keep-all] text-[#d4ddd0]">
-              curl -fsSL{" "}
-              <span className="text-[#93e6b0]">{siteUrl}/install.sh</span>{" "}
-              <span className="text-[#7e887b]">|</span> bash{" "}
-              <span className="text-[#7e887b]">&amp;&amp;</span> {BIN_PATH} login
-            </span>
-          </div>
-          <div className="relative flex items-start gap-2.5 px-[22px] pb-[22px] pt-2 font-mono text-sm leading-7">
-            <span className="select-none font-bold text-[#4ade80]">&gt;</span>
-            <span className="break-words [word-break:keep-all] text-[#d4ddd0]">
-              irm{" "}
-              <span className="text-[#93e6b0]">{siteUrl}/install.ps1</span>{" "}
-              <span className="text-[#7e887b]">|</span> iex{" "}
-              <span className="text-[#7e887b]"># Windows PowerShell</span>
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 border-t border-[#2a2f26] bg-black/15 px-4 py-2.5">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4ade80]/35 px-2.5 py-1 font-mono text-[11px] font-bold text-[#d4ddd0]">
-              <span className="text-token-green">●</span> macOS &amp; Linux
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#4ade80]/35 px-2.5 py-1 font-mono text-[11px] font-bold text-[#d4ddd0]">
-              <span className="text-token-green">●</span> Windows
-            </span>
-          </div>
-        </section>
+        <DirectInstallCard siteUrl={siteUrl} binPath={BIN_PATH} />
       </div>
 
       <section className="rounded-lg border border-border bg-surface p-6">

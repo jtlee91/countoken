@@ -47,13 +47,15 @@ function Get-KstTimestamp {
 New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
 
 Add-Content -Path $LogFile -Value "[$(Get-KstTimestamp)] inspect start"
-& $Bin inspect --state-dir $StateDir --quiet *>> $LogFile
+# cmd-level redirection keeps PowerShell 5.1 from wrapping stderr lines in
+# NativeCommandError records inside the log.
+cmd /c "`"$Bin`" inspect --state-dir `"$StateDir`" --quiet >> `"$LogFile`" 2>&1"
 $status = $LASTEXITCODE
 Add-Content -Path $LogFile -Value "[$(Get-KstTimestamp)] inspect exit=$status"
 
 if ($status -eq 0) {
     Add-Content -Path $LogFile -Value "[$(Get-KstTimestamp)] sync start"
-    & $Bin sync --state-dir $StateDir --quiet *>> $LogFile
+    cmd /c "`"$Bin`" sync --state-dir `"$StateDir`" --quiet >> `"$LogFile`" 2>&1"
     Add-Content -Path $LogFile -Value "[$(Get-KstTimestamp)] sync exit=$LASTEXITCODE"
 } else {
     Add-Content -Path $LogFile -Value "[$(Get-KstTimestamp)] sync skipped inspect_exit=$status"

@@ -212,9 +212,6 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 			})
 		}
 	}
-	if summary.LLMCallCount == 0 {
-		return SessionUsage{}, ErrNoTokenCounts
-	}
 	if rawSessionID != "" {
 		summary.SessionHash = hashSessionID(rawSessionID)
 	}
@@ -245,6 +242,12 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 			LabelType:    "main",
 			LabelText:    "메인 턴",
 		}
+	}
+	// A replay-only Codex rollout may own no token calls while still forming a
+	// required link in a descendant's parent chain. Return the identity alongside
+	// ErrNoTokenCounts so inspect can cache the lineage without creating usage.
+	if summary.LLMCallCount == 0 {
+		return result, ErrNoTokenCounts
 	}
 	return result, nil
 }

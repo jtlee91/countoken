@@ -52,7 +52,12 @@ import (
 // rewritten record timestamps. Only events after the child's own UUIDv7 turn
 // boundary are counted, and repeated cumulative token snapshots are normalized
 // before calls are emitted.
-const parserVersion = 9
+//
+// v10: replay-only Codex rollouts keep their own→parent lineage in source_files
+// even when they own no token calls. Descendants can therefore resolve through
+// zero-usage intermediate threads to the real root instead of appearing as
+// separate sessions.
+const parserVersion = 10
 
 // ParserVersion exposes the current parsing-logic version so the CLI can report
 // it to the sync server (per-device), making a rollout's reach observable.
@@ -485,16 +490,16 @@ func (store *Store) SourceFile(ctx context.Context, provider string, fileKey str
 				  and uc.session_hash = sf.session_hash
 				  and uc.source_file_key = sf.file_key
 			),
-			s.session_hash,
-			s.started_at,
-			s.ended_at,
-			s.user_turn_count,
-			s.llm_call_count,
-			s.input_tokens,
-			s.output_tokens,
-			s.cache_tokens
+			coalesce(s.session_hash, ''),
+			coalesce(s.started_at, ''),
+			coalesce(s.ended_at, ''),
+			coalesce(s.user_turn_count, 0),
+			coalesce(s.llm_call_count, 0),
+			coalesce(s.input_tokens, 0),
+			coalesce(s.output_tokens, 0),
+			coalesce(s.cache_tokens, 0)
 		from source_files sf
-		join sessions s on s.session_hash = sf.session_hash
+		left join sessions s on s.session_hash = sf.session_hash
 		where sf.file_key = ? and sf.provider = ?
 	`, fileKey, provider)
 
@@ -527,6 +532,37 @@ func (store *Store) UpsertSourceFile(ctx context.Context, provider string, fileK
 	return store.UpsertParsedSourceFile(ctx, provider, fileKey, sizeBytes, modifiedAt, usage.SessionUsage{
 		Summary: session,
 	})
+}
+
+// UpsertSourceLineage caches a parsed file's identity without creating a token
+// session. Codex replay-only rollouts frequently own no calls but can sit in the
+// middle of an own→parent chain required to roll descendants up to their root.
+func (store *Store) UpsertSourceLineage(ctx context.Context, provider string, fileKey string, sizeBytes int64, modifiedAt string, parsed usage.SessionUsage) error {
+	now := time.Now().In(kst).Format(time.RFC3339Nano)
+	tx, err := store.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// A changed file can move from owning calls to replay-only. Remove its old
+	// contribution before retaining only the lineage metadata.
+	if _, err := tx.ExecContext(ctx, `
+		delete from usage_calls
+		where provider = ? and source_file_key = ?
+	`, provider, fileKey); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		delete from session_agents
+		where provider = ? and source_file_key = ?
+	`, provider, fileKey); err != nil {
+		return err
+	}
+	if err := upsertSourceFileRecord(ctx, tx, provider, fileKey, sizeBytes, modifiedAt, now, parsed); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string, fileKey string, sizeBytes int64, modifiedAt string, parsed usage.SessionUsage) error {
@@ -572,28 +608,7 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 		}
 	}
 
-	if _, err := tx.ExecContext(ctx, `
-		insert into source_files (
-			file_key,
-			provider,
-			size_bytes,
-			modified_at,
-			session_hash,
-			last_parsed_at,
-			own_session_id,
-			parent_session_id,
-			root_uuid
-		) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		on conflict(file_key) do update set
-			provider = excluded.provider,
-			size_bytes = excluded.size_bytes,
-			modified_at = excluded.modified_at,
-			session_hash = excluded.session_hash,
-			last_parsed_at = excluded.last_parsed_at,
-			own_session_id = excluded.own_session_id,
-			parent_session_id = excluded.parent_session_id,
-			root_uuid = excluded.root_uuid
-	`, fileKey, provider, sizeBytes, modifiedAt, parsed.Summary.SessionHash, now, parsed.OwnSessionID, parsed.ParentSessionID, parsed.RootUUID); err != nil {
+	if err := upsertSourceFileRecord(ctx, tx, provider, fileKey, sizeBytes, modifiedAt, now, parsed); err != nil {
 		return err
 	}
 
@@ -729,6 +744,32 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 	return tx.Commit()
 }
 
+func upsertSourceFileRecord(ctx context.Context, tx *sql.Tx, provider string, fileKey string, sizeBytes int64, modifiedAt string, parsedAt string, parsed usage.SessionUsage) error {
+	_, err := tx.ExecContext(ctx, `
+		insert into source_files (
+			file_key,
+			provider,
+			size_bytes,
+			modified_at,
+			session_hash,
+			last_parsed_at,
+			own_session_id,
+			parent_session_id,
+			root_uuid
+		) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		on conflict(file_key) do update set
+			provider = excluded.provider,
+			size_bytes = excluded.size_bytes,
+			modified_at = excluded.modified_at,
+			session_hash = excluded.session_hash,
+			last_parsed_at = excluded.last_parsed_at,
+			own_session_id = excluded.own_session_id,
+			parent_session_id = excluded.parent_session_id,
+			root_uuid = excluded.root_uuid
+	`, fileKey, provider, sizeBytes, modifiedAt, parsed.Summary.SessionHash, parsedAt, parsed.OwnSessionID, parsed.ParentSessionID, parsed.RootUUID)
+	return err
+}
+
 // ResolveSessionRoots rolls Codex subagent files — each written under its own
 // session id — up to their root parent session, so a spawned thread's calls and
 // agent row move onto the parent's session_hash and the subagent stops showing as
@@ -736,6 +777,9 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 // Claude subagent files already share the parent's session id (parent_session_id
 // empty), so every node is its own root and this is a no-op for them.
 func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) error {
+	if provider != "codex" {
+		return nil
+	}
 	rows, err := store.db.QueryContext(ctx, `
 		select own_session_id, parent_session_id, session_hash
 		from source_files
@@ -785,10 +829,6 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 			affectedRoots[newHash] = struct{}{}
 		}
 	}
-	if len(remaps) == 0 {
-		return nil
-	}
-
 	tx, err := store.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -831,6 +871,31 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 		`, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, now, provider, rootHash); err != nil {
 			return err
 		}
+	}
+
+	// A file can become lineage-only after an ownership-boundary reparse. Its
+	// stale session/agent rows must not remain visible once its calls are gone.
+	if _, err := tx.ExecContext(ctx, `
+		delete from session_agents
+		where provider = ?
+		  and not exists (
+			select 1 from usage_calls uc
+			where uc.provider = session_agents.provider
+			  and uc.session_hash = session_agents.session_hash
+		  )
+	`, provider); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		delete from sessions
+		where provider = ?
+		  and not exists (
+			select 1 from usage_calls uc
+			where uc.provider = sessions.provider
+			  and uc.session_hash = sessions.session_hash
+		  )
+	`, provider); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

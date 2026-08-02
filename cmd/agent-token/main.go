@@ -501,12 +501,18 @@ func inspectProvider(provider string, root string, stateDir string, parseSession
 		key := fileKey(path)
 		if cached, ok, err := store.SourceFile(ctx, provider, key); err != nil {
 			return inspectResult{}, err
-		} else if ok && cached.SizeBytes == metadata.SizeBytes && cached.ModifiedAt == metadata.ModifiedAt && cached.HasUsageCalls {
-			result.FilesReused++
-			result.Sessions = append(result.Sessions, inspectSessionSummary{
-				Provider:       provider,
-				SessionSummary: cached.Session,
-			})
+		} else if ok && cached.SizeBytes == metadata.SizeBytes && cached.ModifiedAt == metadata.ModifiedAt {
+			if cached.HasUsageCalls {
+				result.FilesReused++
+				result.Sessions = append(result.Sessions, inspectSessionSummary{
+					Provider:       provider,
+					SessionSummary: cached.Session,
+				})
+			} else {
+				// Lineage-only files are deliberately cached: they own no usage to
+				// report, but their own→parent link may connect a descendant to root.
+				result.FilesSkipped++
+			}
 			continue
 		}
 
@@ -514,8 +520,14 @@ func inspectProvider(provider string, root string, stateDir string, parseSession
 		if err != nil {
 			if errors.Is(err, skipErr) {
 				result.FilesSkipped++
-				if err := store.DeleteSourceFile(ctx, provider, key); err != nil {
-					return inspectResult{}, err
+				if parsed.OwnSessionID != "" && parsed.Summary.SessionHash != "" {
+					if err := store.UpsertSourceLineage(ctx, provider, key, metadata.SizeBytes, metadata.ModifiedAt, parsed); err != nil {
+						return inspectResult{}, err
+					}
+				} else {
+					if err := store.DeleteSourceFile(ctx, provider, key); err != nil {
+						return inspectResult{}, err
+					}
 				}
 				continue
 			}

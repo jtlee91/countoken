@@ -76,7 +76,6 @@ type remoteDailyUsageItem struct {
 	UsageDate          string `json:"usage_date"`
 	Provider           string `json:"provider"`
 	Model              string `json:"model"`
-	Speed              string `json:"speed"`
 	SessionCount       int    `json:"session_count"`
 	LLMCallCount       int    `json:"llm_call_count"`
 	InputTokens        int    `json:"input_tokens"`
@@ -412,7 +411,6 @@ func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, ses
 			UsageDate:          row.UsageDate,
 			Provider:           row.Provider,
 			Model:              row.Model,
-			Speed:              row.Speed,
 			SessionCount:       row.SessionCount,
 			LLMCallCount:       row.LLMCallCount,
 			InputTokens:        row.InputTokens,

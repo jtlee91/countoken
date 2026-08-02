@@ -9,8 +9,7 @@
 alter table public.usage_daily
   add column if not exists input_raw_tokens bigint not null default 0,
   add column if not exists cache_write_5m_tokens bigint not null default 0,
-  add column if not exists cache_write_1h_tokens bigint not null default 0,
-  add column if not exists speed text not null default 'standard';
+  add column if not exists cache_write_1h_tokens bigint not null default 0;
 
 alter table public.usage_sessions
   add column if not exists input_raw_tokens bigint not null default 0,
@@ -33,9 +32,17 @@ alter table public.usage_session_agents
   add column if not exists model text not null default '',
   add column if not exists speed text not null default 'standard';
 
--- usage_daily is keyed per (user, device, date, provider, model). Fast mode bills
--- at a different rate, so it has to split the same way a model does.
-alter table public.usage_daily drop constraint if exists usage_daily_pkey;
-alter table public.usage_daily
-  add constraint usage_daily_pkey
-  primary key (user_id, device_id, usage_date, provider, model, speed);
+-- usage_daily deliberately does NOT gain a speed column, and its primary key is
+-- left alone. Splitting the daily rollup by speed would be free only if it were
+-- read, and nothing reads it: cost is computed from usage_sessions and
+-- usage_session_agents, while usage_daily supplies period token, call, and
+-- session totals that carry no speed dimension.
+--
+-- Adding it would cost two things. session_count is count(distinct session_hash)
+-- per group, so a session that toggled speed mid-day would be counted in both
+-- rows and inflate every session figure the dashboard sums (locally 349 -> 383).
+-- And rebuilding the key is one-way: once rows exist under the wider key,
+-- reverting means deduplicating first, which takes a rollback off the table.
+--
+-- When a per-day cost chart eventually needs it, it should arrive together with
+-- a session_count that attributes each session-day to exactly one row.

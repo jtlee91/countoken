@@ -102,7 +102,6 @@ type DailyUsageRow struct {
 	UsageDate          string
 	Provider           string
 	Model              string
-	Speed              string
 	SessionCount       int
 	LLMCallCount       int
 	InputTokens        int
@@ -381,7 +380,6 @@ func (store *Store) ListPendingDailyUsage(ctx context.Context) ([]DailyUsageRow,
 			affected_days.usage_date,
 			uc.provider,
 			coalesce(uc.model, '') as model,
-			coalesce(uc.speed, 'standard') as speed,
 			count(distinct uc.session_hash) as session_count,
 			count(*) as llm_call_count,
 			coalesce(sum(uc.input_tokens), 0) as input_tokens,
@@ -397,8 +395,8 @@ func (store *Store) ListPendingDailyUsage(ctx context.Context) ([]DailyUsageRow,
 		join usage_calls uc
 		  on uc.provider = affected_days.provider
 		 and substr(uc.occurred_at, 1, 10) = affected_days.usage_date
-		group by affected_days.usage_date, uc.provider, coalesce(uc.model, ''), coalesce(uc.speed, 'standard')
-		order by affected_days.usage_date, uc.provider, coalesce(uc.model, ''), coalesce(uc.speed, 'standard')
+		group by affected_days.usage_date, uc.provider, coalesce(uc.model, '')
+		order by affected_days.usage_date, uc.provider, coalesce(uc.model, '')
 	`)
 	if err != nil {
 		return nil, err
@@ -412,7 +410,6 @@ func (store *Store) ListPendingDailyUsage(ctx context.Context) ([]DailyUsageRow,
 			&row.UsageDate,
 			&row.Provider,
 			&row.Model,
-			&row.Speed,
 			&row.SessionCount,
 			&row.LLMCallCount,
 			&row.InputTokens,
@@ -545,7 +542,10 @@ func (store *Store) SourceFile(ctx context.Context, provider string, fileKey str
 			s.llm_call_count,
 			s.input_tokens,
 			s.output_tokens,
-			s.cache_tokens
+			s.cache_tokens,
+			s.input_raw_tokens,
+			s.cache_write_5m_tokens,
+			s.cache_write_1h_tokens
 		from source_files sf
 		join sessions s on s.session_hash = sf.session_hash
 		where sf.file_key = ? and sf.provider = ?
@@ -565,6 +565,9 @@ func (store *Store) SourceFile(ctx context.Context, provider string, fileKey str
 		&session.Tokens.Input,
 		&session.Tokens.Output,
 		&session.Tokens.Cache,
+		&session.Tokens.InputRaw,
+		&session.Tokens.CacheWrite5m,
+		&session.Tokens.CacheWrite1h,
 	)
 	if err == sql.ErrNoRows {
 		return SourceFile{}, false, nil

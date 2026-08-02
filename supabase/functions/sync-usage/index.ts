@@ -13,7 +13,9 @@ type SyncDevice = {
 };
 
 // Cost fields arrive only from newer agents: the buckets and model from parser
-// version 10, session and agent speed from 11. They stay optional here so an
+// version 10, session and agent speed from 11. usage_daily takes the buckets but
+// not speed - nothing reads a per-speed daily rollup, and splitting it would
+// double-count sessions that toggled speed mid-day. They stay optional here so an
 // older agent keeps syncing successfully; its rows land with the column defaults
 // and fill in once that device upgrades and re-parses.
 type CostBuckets = {
@@ -26,7 +28,6 @@ type DailyUsage = CostBuckets & {
   usage_date: string;
   provider: Provider;
   model: string;
-  speed?: string;
   session_count: number;
   llm_call_count: number;
   input_tokens: number;
@@ -173,7 +174,6 @@ function isDailyUsage(value: unknown): value is DailyUsage {
     isNonNegativeInteger(item.cache_tokens) &&
     typeof item.first_used_at === "string" &&
     typeof item.last_used_at === "string" &&
-    isSpeed(item.speed) &&
     hasValidCostBuckets(item);
 }
 
@@ -369,7 +369,6 @@ Deno.serve(async (req: Request) => {
     usage_date: daily.usage_date,
     provider: daily.provider,
     model: daily.model,
-    speed: daily.speed ?? "standard",
     session_count: daily.session_count,
     llm_call_count: daily.llm_call_count,
     input_tokens: daily.input_tokens,
@@ -470,7 +469,7 @@ Deno.serve(async (req: Request) => {
   if (dailyRows.length > 0) {
     const { error: dailyError } = await supabase
       .from("usage_daily")
-      .upsert(dailyRows, { onConflict: "user_id,device_id,usage_date,provider,model,speed" });
+      .upsert(dailyRows, { onConflict: "user_id,device_id,usage_date,provider,model" });
 
     if (dailyError) {
       return jsonResponse({ error: "database_error", detail: dailyError.message }, 500);

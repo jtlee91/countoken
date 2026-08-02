@@ -24,11 +24,15 @@ export function SessionModelChip({
   modelCount,
   models,
   totalUSD,
+  costPartial,
 }: {
   model: string;
   modelCount: number;
   models: SessionModelCost[];
   totalUSD: number | null;
+  // 요율이 없는 모델이 섞여 있으면 합계가 실제보다 작다. 숫자만 보여주면
+  // 그 사실이 드러나지 않아서 합계 아래에 명시한다.
+  costPartial: boolean;
 }) {
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
 
@@ -119,6 +123,13 @@ export function SessionModelChip({
                     {formatApproxUSD(totalUSD)}
                   </span>
                 </div>
+                {costPartial
+                  ? (
+                    <div className="mt-1.5 text-[10px] font-extrabold leading-4 text-white/45">
+                      요율이 등록되지 않은 모델은 합계에서 빠져 있다
+                    </div>
+                  )
+                  : null}
               </>
             )}
           </div>

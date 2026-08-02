@@ -314,6 +314,7 @@ export function RecentSessionsTable({
                         modelCount={session.modelCount}
                         models={session.modelCosts}
                         totalUSD={session.costUSD}
+                        costPartial={session.costPartial}
                       />
                     </span>
                   </td>

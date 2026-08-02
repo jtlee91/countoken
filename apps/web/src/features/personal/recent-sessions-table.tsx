@@ -4,9 +4,7 @@ import { Fragment, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import type { DashboardSession, SessionAgent } from "@/lib/data/models";
-import { formatApproxUSD } from "@/lib/format/cost";
 import { formatTokenAmount } from "@/lib/format/tokens";
-import { SessionModelChip } from "./session-model-chip";
 import { UsageCompositionCell } from "./usage-composition-cell";
 
 const tooltipNumberFormatter = new Intl.NumberFormat("ko-KR");
@@ -200,16 +198,6 @@ function AgentRow({ agent }: { agent: SessionAgent }) {
                 {tooltipNumberFormatter.format(agent.totalTokens)} 토큰
               </span>
             </div>
-            {agent.costUSD === null ? null : (
-              <div className="flex justify-between gap-3">
-                <span className="text-white/60">
-                  {agent.model ? agent.model : "금액"}
-                </span>
-                <span className="font-mono font-black">
-                  {formatApproxUSD(agent.costUSD)}
-                </span>
-              </div>
-            )}
           </div>
         ) : null}
       </td>
@@ -228,7 +216,6 @@ function AgentRow({ agent }: { agent: SessionAgent }) {
           cacheTokens={agent.cacheTokens}
           outputTokens={agent.outputTokens}
           totalTokens={agent.totalTokens}
-          costUSD={agent.costUSD}
         />
       </td>
     </tr>
@@ -302,20 +289,11 @@ export function RecentSessionsTable({
                       </span>
                       {session.providerLabel}
                     </span>
-                    <span className="mt-[3px] flex min-w-0 items-center gap-1.5 pl-[19px]">
-                      <span
-                        className="min-w-0 max-w-[8rem] truncate text-[11px] font-extrabold text-muted"
-                        title={session.deviceLabel}
-                      >
-                        {session.deviceLabel}
-                      </span>
-                      <SessionModelChip
-                        model={session.model}
-                        modelCount={session.modelCount}
-                        models={session.modelCosts}
-                        totalUSD={session.costUSD}
-                        costPartial={session.costPartial}
-                      />
+                    <span
+                      className="mt-[3px] block max-w-[12rem] truncate pl-[19px] text-[11px] font-extrabold text-muted"
+                      title={session.deviceLabel}
+                    >
+                      {session.deviceLabel}
                     </span>
                   </td>
                   <td className="border-b border-border px-3 py-3">
@@ -347,7 +325,6 @@ export function RecentSessionsTable({
                       cacheTokens={session.cacheTokens}
                       outputTokens={session.outputTokens}
                       totalTokens={session.totalTokens}
-                      costUSD={session.costUSD}
                     />
                   </td>
                 </tr>

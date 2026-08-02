@@ -73,62 +73,48 @@ type remoteDeviceItem struct {
 }
 
 type remoteDailyUsageItem struct {
-	UsageDate          string `json:"usage_date"`
-	Provider           string `json:"provider"`
-	Model              string `json:"model"`
-	SessionCount       int    `json:"session_count"`
-	LLMCallCount       int    `json:"llm_call_count"`
-	InputTokens        int    `json:"input_tokens"`
-	OutputTokens       int    `json:"output_tokens"`
-	CacheTokens        int    `json:"cache_tokens"`
-	InputRawTokens     int    `json:"input_raw_tokens"`
-	CacheWrite5mTokens int    `json:"cache_write_5m_tokens"`
-	CacheWrite1hTokens int    `json:"cache_write_1h_tokens"`
-	FirstUsedAt        string `json:"first_used_at"`
-	LastUsedAt         string `json:"last_used_at"`
-	LocalUpdatedAt     string `json:"local_updated_at"`
+	UsageDate      string `json:"usage_date"`
+	Provider       string `json:"provider"`
+	Model          string `json:"model"`
+	SessionCount   int    `json:"session_count"`
+	LLMCallCount   int    `json:"llm_call_count"`
+	InputTokens    int    `json:"input_tokens"`
+	OutputTokens   int    `json:"output_tokens"`
+	CacheTokens    int    `json:"cache_tokens"`
+	FirstUsedAt    string `json:"first_used_at"`
+	LastUsedAt     string `json:"last_used_at"`
+	LocalUpdatedAt string `json:"local_updated_at"`
 }
 
 type remoteSessionUsageItem struct {
-	SessionHash        string `json:"session_hash"`
-	Provider           string `json:"provider"`
-	StartedAt          string `json:"started_at"`
-	EndedAt            string `json:"ended_at"`
-	UserTurnCount      int    `json:"user_turn_count"`
-	LLMCallCount       int    `json:"llm_call_count"`
-	InputTokens        int    `json:"input_tokens"`
-	OutputTokens       int    `json:"output_tokens"`
-	CacheTokens        int    `json:"cache_tokens"`
-	InputRawTokens     int    `json:"input_raw_tokens"`
-	CacheWrite5mTokens int    `json:"cache_write_5m_tokens"`
-	CacheWrite1hTokens int    `json:"cache_write_1h_tokens"`
-	Model              string `json:"model"`
-	ModelCount         int    `json:"model_count"`
-	Speed              string `json:"speed"`
-	LocalUpdatedAt     string `json:"local_updated_at"`
+	SessionHash    string `json:"session_hash"`
+	Provider       string `json:"provider"`
+	StartedAt      string `json:"started_at"`
+	EndedAt        string `json:"ended_at"`
+	UserTurnCount  int    `json:"user_turn_count"`
+	LLMCallCount   int    `json:"llm_call_count"`
+	InputTokens    int    `json:"input_tokens"`
+	OutputTokens   int    `json:"output_tokens"`
+	CacheTokens    int    `json:"cache_tokens"`
+	LocalUpdatedAt string `json:"local_updated_at"`
 }
 
 type remoteSessionAgentItem struct {
-	SessionHash        string `json:"session_hash"`
-	Provider           string `json:"provider"`
-	AgentKey           string `json:"agent_key"`
-	ParentAgentKey     string `json:"parent_agent_key"`
-	Depth              int    `json:"depth"`
-	LabelType          string `json:"label_type"`
-	LabelText          string `json:"label_text"`
-	InputTokens        int    `json:"input_tokens"`
-	OutputTokens       int    `json:"output_tokens"`
-	CacheTokens        int    `json:"cache_tokens"`
-	InputRawTokens     int    `json:"input_raw_tokens"`
-	CacheWrite5mTokens int    `json:"cache_write_5m_tokens"`
-	CacheWrite1hTokens int    `json:"cache_write_1h_tokens"`
-	Model              string `json:"model"`
-	Speed              string `json:"speed"`
-	LLMCallCount       int    `json:"llm_call_count"`
-	UserTurnCount      int    `json:"user_turn_count"`
-	StartedAt          string `json:"started_at"`
-	EndedAt            string `json:"ended_at"`
-	LocalUpdatedAt     string `json:"local_updated_at"`
+	SessionHash    string `json:"session_hash"`
+	Provider       string `json:"provider"`
+	AgentKey       string `json:"agent_key"`
+	ParentAgentKey string `json:"parent_agent_key"`
+	Depth          int    `json:"depth"`
+	LabelType      string `json:"label_type"`
+	LabelText      string `json:"label_text"`
+	InputTokens    int    `json:"input_tokens"`
+	OutputTokens   int    `json:"output_tokens"`
+	CacheTokens    int    `json:"cache_tokens"`
+	LLMCallCount   int    `json:"llm_call_count"`
+	UserTurnCount  int    `json:"user_turn_count"`
+	StartedAt      string `json:"started_at"`
+	EndedAt        string `json:"ended_at"`
+	LocalUpdatedAt string `json:"local_updated_at"`
 }
 
 type remoteSessionInventoryItem struct {
@@ -408,64 +394,50 @@ func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, ses
 	}
 	for _, row := range daily {
 		payload.Daily = append(payload.Daily, remoteDailyUsageItem{
-			UsageDate:          row.UsageDate,
-			Provider:           row.Provider,
-			Model:              row.Model,
-			SessionCount:       row.SessionCount,
-			LLMCallCount:       row.LLMCallCount,
-			InputTokens:        row.InputTokens,
-			OutputTokens:       row.OutputTokens,
-			CacheTokens:        row.CacheTokens,
-			InputRawTokens:     row.InputRawTokens,
-			CacheWrite5mTokens: row.CacheWrite5mTokens,
-			CacheWrite1hTokens: row.CacheWrite1hTokens,
-			FirstUsedAt:        row.FirstUsedAt,
-			LastUsedAt:         row.LastUsedAt,
-			LocalUpdatedAt:     row.LocalUpdatedAt,
+			UsageDate:      row.UsageDate,
+			Provider:       row.Provider,
+			Model:          row.Model,
+			SessionCount:   row.SessionCount,
+			LLMCallCount:   row.LLMCallCount,
+			InputTokens:    row.InputTokens,
+			OutputTokens:   row.OutputTokens,
+			CacheTokens:    row.CacheTokens,
+			FirstUsedAt:    row.FirstUsedAt,
+			LastUsedAt:     row.LastUsedAt,
+			LocalUpdatedAt: row.LocalUpdatedAt,
 		})
 	}
 	for _, row := range sessions {
 		payload.Sessions = append(payload.Sessions, remoteSessionUsageItem{
-			SessionHash:        row.SessionHash,
-			Provider:           row.Provider,
-			StartedAt:          row.StartedAt,
-			EndedAt:            row.EndedAt,
-			UserTurnCount:      row.UserTurnCount,
-			LLMCallCount:       row.LLMCallCount,
-			InputTokens:        row.Tokens.Input,
-			OutputTokens:       row.Tokens.Output,
-			CacheTokens:        row.Tokens.Cache,
-			InputRawTokens:     row.Tokens.InputRaw,
-			CacheWrite5mTokens: row.Tokens.CacheWrite5m,
-			CacheWrite1hTokens: row.Tokens.CacheWrite1h,
-			Model:              row.Model,
-			ModelCount:         row.ModelCount,
-			Speed:              row.Speed,
-			LocalUpdatedAt:     row.UpdatedAt,
+			SessionHash:    row.SessionHash,
+			Provider:       row.Provider,
+			StartedAt:      row.StartedAt,
+			EndedAt:        row.EndedAt,
+			UserTurnCount:  row.UserTurnCount,
+			LLMCallCount:   row.LLMCallCount,
+			InputTokens:    row.Tokens.Input,
+			OutputTokens:   row.Tokens.Output,
+			CacheTokens:    row.Tokens.Cache,
+			LocalUpdatedAt: row.UpdatedAt,
 		})
 	}
 	for _, row := range agents {
 		payload.Agents = append(payload.Agents, remoteSessionAgentItem{
-			SessionHash:        row.SessionHash,
-			Provider:           row.Provider,
-			AgentKey:           row.AgentKey,
-			ParentAgentKey:     row.ParentAgentKey,
-			Depth:              row.Depth,
-			LabelType:          row.LabelType,
-			LabelText:          row.LabelText,
-			InputTokens:        row.InputTokens,
-			OutputTokens:       row.OutputTokens,
-			CacheTokens:        row.CacheTokens,
-			InputRawTokens:     row.InputRawTokens,
-			CacheWrite5mTokens: row.CacheWrite5mTokens,
-			CacheWrite1hTokens: row.CacheWrite1hTokens,
-			Model:              row.Model,
-			Speed:              row.Speed,
-			LLMCallCount:       row.LLMCallCount,
-			UserTurnCount:      row.UserTurnCount,
-			StartedAt:          row.StartedAt,
-			EndedAt:            row.EndedAt,
-			LocalUpdatedAt:     row.UpdatedAt,
+			SessionHash:    row.SessionHash,
+			Provider:       row.Provider,
+			AgentKey:       row.AgentKey,
+			ParentAgentKey: row.ParentAgentKey,
+			Depth:          row.Depth,
+			LabelType:      row.LabelType,
+			LabelText:      row.LabelText,
+			InputTokens:    row.InputTokens,
+			OutputTokens:   row.OutputTokens,
+			CacheTokens:    row.CacheTokens,
+			LLMCallCount:   row.LLMCallCount,
+			UserTurnCount:  row.UserTurnCount,
+			StartedAt:      row.StartedAt,
+			EndedAt:        row.EndedAt,
+			LocalUpdatedAt: row.UpdatedAt,
 		})
 	}
 	for _, row := range inventory {

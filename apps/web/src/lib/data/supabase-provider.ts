@@ -16,12 +16,6 @@ import {
   type UsageSessionAggregateRow,
   type UsageSessionAgentRow,
 } from "@/lib/data/usage-session-aggregates";
-import {
-  ModelRateTable,
-  toModelRate,
-  type ModelRate,
-  type ModelRateRow,
-} from "@/lib/cost/model-rates";
 import { hasPublicSupabaseEnv } from "@/lib/env";
 import { formatTokenAmount } from "@/lib/format/tokens";
 import {
@@ -245,35 +239,6 @@ export async function getViewerInsightMetrics(): Promise<InsightMetrics> {
   };
 }
 
-// 요율표는 공개 참조 데이터라 사용자별 필터가 없다. 수십 행 규모라 통째로 읽고
-// 메모리에서 조회한다. 조회에 실패해도 대시보드는 그대로 뜨고 금액만 빠진다.
-async function fetchModelRates(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-): Promise<ModelRateTable> {
-  const result = await supabase
-    .from("model_rates")
-    .select(
-      [
-        "provider",
-        "model",
-        "effective_from",
-        "context_tier",
-        "speed",
-        "input_per_mtok",
-        "cache_write_5m_per_mtok",
-        "cache_write_1h_per_mtok",
-        "cache_read_per_mtok",
-        "output_per_mtok",
-      ].join(","),
-    );
-
-  const rows = (result.data ?? []) as unknown as ModelRateRow[];
-  const rates = rows
-    .map(toModelRate)
-    .filter((rate): rate is ModelRate => rate !== null);
-  return new ModelRateTable(rates);
-}
-
 export const supabaseDataProvider: TokenPlaneDataProvider = {
   async getDashboardData(viewer): Promise<DashboardData> {
     if (!hasPublicSupabaseEnv() || !viewer.userId) {
@@ -332,7 +297,6 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
       rankingResult,
       turnTotalsResult,
       providerTurnsResult,
-      ratesResult,
     ] = await Promise.all([
         supabase
         .from("usage_daily")
@@ -370,12 +334,6 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
             "input_tokens",
             "output_tokens",
             "cache_tokens",
-            "input_raw_tokens",
-            "cache_write_5m_tokens",
-            "cache_write_1h_tokens",
-            "model",
-            "model_count",
-            "speed",
             "local_updated_at",
             "synced_at",
           ].join(","),
@@ -386,7 +344,6 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
         getWeeklyRankingRows(),
         supabase.rpc("get_turn_totals"),
         supabase.rpc("get_provider_turn_totals"),
-        fetchModelRates(supabase),
       ]);
 
     const turnTotals =
@@ -443,11 +400,6 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
             "input_tokens",
             "output_tokens",
             "cache_tokens",
-            "input_raw_tokens",
-            "cache_write_5m_tokens",
-            "cache_write_1h_tokens",
-            "model",
-            "speed",
             "llm_call_count",
             "user_turn_count",
             "started_at",
@@ -477,7 +429,6 @@ export const supabaseDataProvider: TokenPlaneDataProvider = {
     const dashboard = summarizeUsageDailyDashboard(dailyRows, {
       recentSessionRows: enrichedSessionRows,
       recentSessionLimit: 5,
-      rates: ratesResult,
     });
 
     const providerTurns = new Map(

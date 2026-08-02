@@ -97,17 +97,6 @@ export type SessionAgent = {
   userTurnCount: number;
   startedAt: string | null;
   endedAt: string | null;
-  model: string;
-  // 공개 요율로 환산한 금액. 요율이 없는 모델은 null이고 UI에서 금액을 감춘다.
-  costUSD: number | null;
-};
-
-// 세션이 사용한 모델 하나의 몫 — 모델 칩 호버 상세에 쓴다
-export type SessionModelCost = {
-  model: string;
-  llmCalls: number;
-  tokens: number;
-  costUSD: number | null;
 };
 
 export type DashboardSession = {
@@ -128,13 +117,6 @@ export type DashboardSession = {
   syncedAt: string | null;
   // 서브에이전트 분해. 2개 이상일 때만 펼침 UI를 노출한다(메인 턴 + 서브 N).
   agents: SessionAgent[];
-  // 토큰을 가장 많이 쓴 모델과, 세션이 쓴 서로 다른 모델 수. 2 이상이면 "+N".
-  model: string;
-  modelCount: number;
-  costUSD: number | null;
-  // 일부 모델만 요율이 등록돼 있어 costUSD가 실제보다 작은 상태
-  costPartial: boolean;
-  modelCosts: SessionModelCost[];
 };
 
 // 기간별 에이전트/토큰 구성 분해 — 히어로 지표 호버 상세에 사용한다

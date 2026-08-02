@@ -48,22 +48,11 @@ import (
 // session_hash; Claude call keys are message-identity based (not session scoped)
 // so the shared calls dedupe on merge.
 //
-// v11: sessions and agents carry the dominant billing speed, so a fast-mode
-// session prices at the fast rate. Fast mode is a third of Codex tokens and
-// costs 2-2.5x, which is far too large to round away; the approximation of one
-// speed per row misprices only the minority side of a mixed row, about 1% of
-// tokens locally.
-//
-// v10: cost buckets — cache writes are split by TTL (Claude) and carved out of
-// the uncached input (Codex), the billing speed is recorded, and Codex calls
-// carry the model read from turn_context. The legacy input/output/cache columns
-// keep their exact values; the new columns decompose them.
-//
 // v9: Codex fork replay — a child rollout can prepend copied parent history with
 // rewritten record timestamps. Only events after the child's own UUIDv7 turn
 // boundary are counted, and repeated cumulative token snapshots are normalized
 // before calls are emitted.
-const parserVersion = 11
+const parserVersion = 9
 
 // ParserVersion exposes the current parsing-logic version so the CLI can report
 // it to the sync server (per-device), making a rollout's reach observable.
@@ -83,11 +72,8 @@ type SourceFile struct {
 }
 
 type SessionRow struct {
-	Model      string
-	ModelCount int
-	Speed      string
-	Provider   string
-	UpdatedAt  string
+	Provider  string
+	UpdatedAt string
 	usage.SessionSummary
 }
 
@@ -99,43 +85,35 @@ type UsageCallRow struct {
 }
 
 type DailyUsageRow struct {
-	UsageDate          string
-	Provider           string
-	Model              string
-	SessionCount       int
-	LLMCallCount       int
-	InputTokens        int
-	OutputTokens       int
-	CacheTokens        int
-	InputRawTokens     int
-	CacheWrite5mTokens int
-	CacheWrite1hTokens int
-	FirstUsedAt        string
-	LastUsedAt         string
-	LocalUpdatedAt     string
+	UsageDate      string
+	Provider       string
+	Model          string
+	SessionCount   int
+	LLMCallCount   int
+	InputTokens    int
+	OutputTokens   int
+	CacheTokens    int
+	FirstUsedAt    string
+	LastUsedAt     string
+	LocalUpdatedAt string
 }
 
 type SessionAgentRow struct {
-	Model              string
-	Speed              string
-	Provider           string
-	SessionHash        string
-	AgentKey           string
-	ParentAgentKey     string
-	Depth              int
-	LabelType          string
-	LabelText          string
-	InputTokens        int
-	OutputTokens       int
-	CacheTokens        int
-	InputRawTokens     int
-	CacheWrite5mTokens int
-	CacheWrite1hTokens int
-	LLMCallCount       int
-	UserTurnCount      int
-	StartedAt          string
-	EndedAt            string
-	UpdatedAt          string
+	Provider       string
+	SessionHash    string
+	AgentKey       string
+	ParentAgentKey string
+	Depth          int
+	LabelType      string
+	LabelText      string
+	InputTokens    int
+	OutputTokens   int
+	CacheTokens    int
+	LLMCallCount   int
+	UserTurnCount  int
+	StartedAt      string
+	EndedAt        string
+	UpdatedAt      string
 }
 
 type LocalDevice struct {
@@ -307,11 +285,6 @@ func (store *Store) ListPendingSessionAgents(ctx context.Context) ([]SessionAgen
 			sa.input_tokens,
 			sa.output_tokens,
 			sa.cache_tokens,
-			sa.input_raw_tokens,
-			sa.cache_write_5m_tokens,
-			sa.cache_write_1h_tokens,
-			sa.model,
-			sa.speed,
 			sa.llm_call_count,
 			sa.user_turn_count,
 			sa.started_at,
@@ -343,11 +316,6 @@ func (store *Store) ListPendingSessionAgents(ctx context.Context) ([]SessionAgen
 			&agent.InputTokens,
 			&agent.OutputTokens,
 			&agent.CacheTokens,
-			&agent.InputRawTokens,
-			&agent.CacheWrite5mTokens,
-			&agent.CacheWrite1hTokens,
-			&agent.Model,
-			&agent.Speed,
 			&agent.LLMCallCount,
 			&agent.UserTurnCount,
 			&agent.StartedAt,
@@ -385,9 +353,6 @@ func (store *Store) ListPendingDailyUsage(ctx context.Context) ([]DailyUsageRow,
 			coalesce(sum(uc.input_tokens), 0) as input_tokens,
 			coalesce(sum(uc.output_tokens), 0) as output_tokens,
 			coalesce(sum(uc.cache_tokens), 0) as cache_tokens,
-			coalesce(sum(uc.input_raw_tokens), 0) as input_raw_tokens,
-			coalesce(sum(uc.cache_write_5m_tokens), 0) as cache_write_5m_tokens,
-			coalesce(sum(uc.cache_write_1h_tokens), 0) as cache_write_1h_tokens,
 			min(uc.occurred_at) as first_used_at,
 			max(uc.occurred_at) as last_used_at,
 			max(uc.updated_at) as local_updated_at
@@ -415,9 +380,6 @@ func (store *Store) ListPendingDailyUsage(ctx context.Context) ([]DailyUsageRow,
 			&row.InputTokens,
 			&row.OutputTokens,
 			&row.CacheTokens,
-			&row.InputRawTokens,
-			&row.CacheWrite5mTokens,
-			&row.CacheWrite1hTokens,
 			&row.FirstUsedAt,
 			&row.LastUsedAt,
 			&row.LocalUpdatedAt,
@@ -444,12 +406,6 @@ func (store *Store) listSessions(ctx context.Context, where string) ([]SessionRo
 			input_tokens,
 			output_tokens,
 			cache_tokens,
-			input_raw_tokens,
-			cache_write_5m_tokens,
-			cache_write_1h_tokens,
-			model,
-			model_count,
-			speed,
 			updated_at
 		from sessions
 		` + where + `
@@ -474,12 +430,6 @@ func (store *Store) listSessions(ctx context.Context, where string) ([]SessionRo
 			&session.Tokens.Input,
 			&session.Tokens.Output,
 			&session.Tokens.Cache,
-			&session.Tokens.InputRaw,
-			&session.Tokens.CacheWrite5m,
-			&session.Tokens.CacheWrite1h,
-			&session.Model,
-			&session.ModelCount,
-			&session.Speed,
 			&session.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -542,10 +492,7 @@ func (store *Store) SourceFile(ctx context.Context, provider string, fileKey str
 			s.llm_call_count,
 			s.input_tokens,
 			s.output_tokens,
-			s.cache_tokens,
-			s.input_raw_tokens,
-			s.cache_write_5m_tokens,
-			s.cache_write_1h_tokens
+			s.cache_tokens
 		from source_files sf
 		join sessions s on s.session_hash = sf.session_hash
 		where sf.file_key = ? and sf.provider = ?
@@ -565,9 +512,6 @@ func (store *Store) SourceFile(ctx context.Context, provider string, fileKey str
 		&session.Tokens.Input,
 		&session.Tokens.Output,
 		&session.Tokens.Cache,
-		&session.Tokens.InputRaw,
-		&session.Tokens.CacheWrite5m,
-		&session.Tokens.CacheWrite1h,
 	)
 	if err == sql.ErrNoRows {
 		return SourceFile{}, false, nil
@@ -608,34 +552,22 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 				call_index,
 				occurred_at,
 				model,
-				speed,
 				input_tokens,
 				output_tokens,
 				cache_tokens,
-				input_raw_tokens,
-				cache_write_5m_tokens,
-				cache_write_1h_tokens,
 				source_file_key,
 				updated_at
-			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			on conflict(provider, session_hash, call_key) do update set
 				call_index = excluded.call_index,
 				occurred_at = excluded.occurred_at,
 				model = excluded.model,
-				speed = excluded.speed,
 				input_tokens = excluded.input_tokens,
 				output_tokens = excluded.output_tokens,
 				cache_tokens = excluded.cache_tokens,
-				input_raw_tokens = excluded.input_raw_tokens,
-				cache_write_5m_tokens = excluded.cache_write_5m_tokens,
-				cache_write_1h_tokens = excluded.cache_write_1h_tokens,
 				source_file_key = excluded.source_file_key,
 				updated_at = excluded.updated_at
-		`, provider, parsed.Summary.SessionHash, call.CallKey, call.CallIndex, call.OccurredAt,
-			nullableString(call.Model), normalizedSpeed(call.Speed),
-			call.Tokens.Input, call.Tokens.Output, call.Tokens.Cache,
-			call.Tokens.InputRaw, call.Tokens.CacheWrite5m, call.Tokens.CacheWrite1h,
-			fileKey, now); err != nil {
+		`, provider, parsed.Summary.SessionHash, call.CallKey, call.CallIndex, call.OccurredAt, nullableString(call.Model), call.Tokens.Input, call.Tokens.Output, call.Tokens.Cache, fileKey, now); err != nil {
 			return err
 		}
 	}
@@ -673,19 +605,6 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 	// the session in lockstep with the usage_calls-based daily rollup. user_turn_count
 	// can't come from calls, so we keep the largest per-file human-prompt count (a
 	// subagent file contributes the same or fewer prompts than its parent).
-	// The dominant model drives the list chip; model_count tells the UI whether to
-	// render a "+N". Dominance is by token volume because rates live server-side.
-	sessionModel, sessionModelCount, err := dominantModel(ctx, tx,
-		`provider = ? and session_hash = ?`, provider, parsed.Summary.SessionHash)
-	if err != nil {
-		return err
-	}
-	sessionSpeed, err := dominantSpeed(ctx, tx,
-		`provider = ? and session_hash = ?`, provider, parsed.Summary.SessionHash)
-	if err != nil {
-		return err
-	}
-
 	if _, err := tx.ExecContext(ctx, `
 		insert into sessions (
 			session_hash,
@@ -697,12 +616,6 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 			input_tokens,
 			output_tokens,
 			cache_tokens,
-			input_raw_tokens,
-			cache_write_5m_tokens,
-			cache_write_1h_tokens,
-			model,
-			model_count,
-			speed,
 			updated_at,
 			need_sync,
 			synced_at
@@ -717,12 +630,6 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 			case when count(*) > 0 then coalesce(sum(input_tokens), 0) else ? end,
 			case when count(*) > 0 then coalesce(sum(output_tokens), 0) else ? end,
 			case when count(*) > 0 then coalesce(sum(cache_tokens), 0) else ? end,
-			coalesce(sum(input_raw_tokens), 0),
-			coalesce(sum(cache_write_5m_tokens), 0),
-			coalesce(sum(cache_write_1h_tokens), 0),
-			?,
-			?,
-			?,
 			?,
 			1,
 			null
@@ -737,12 +644,6 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 			input_tokens = excluded.input_tokens,
 			output_tokens = excluded.output_tokens,
 			cache_tokens = excluded.cache_tokens,
-			input_raw_tokens = excluded.input_raw_tokens,
-			cache_write_5m_tokens = excluded.cache_write_5m_tokens,
-			cache_write_1h_tokens = excluded.cache_write_1h_tokens,
-			model = excluded.model,
-			model_count = excluded.model_count,
-			speed = excluded.speed,
 			updated_at = excluded.updated_at,
 			need_sync = 1,
 			synced_at = null
@@ -751,7 +652,6 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 		parsed.Summary.UserTurnCount,
 		parsed.Summary.LLMCallCount,
 		parsed.Summary.Tokens.Input, parsed.Summary.Tokens.Output, parsed.Summary.Tokens.Cache,
-		sessionModel, sessionModelCount, sessionSpeed,
 		now, provider, parsed.Summary.SessionHash); err != nil {
 		return err
 	}
@@ -762,31 +662,17 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 	// non-empty so Claude's split sources (subagent file = tokens, main file =
 	// label) don't clobber each other regardless of parse order.
 	if agentKey := parsed.Agent.AgentKey; agentKey != "" {
-		// An agent lives in one source file, so its calls are almost always a single
-		// model; the web groups agent rows by model to get a session breakdown.
-		agentModel, _, err := dominantModel(ctx, tx, `provider = ? and source_file_key = ?`, provider, fileKey)
-		if err != nil {
-			return err
-		}
-		agentSpeed, err := dominantSpeed(ctx, tx, `provider = ? and source_file_key = ?`, provider, fileKey)
-		if err != nil {
-			return err
-		}
 		if _, err := tx.ExecContext(ctx, `
 			insert into session_agents (
 				provider, session_hash, agent_key, parent_agent_key, depth,
 				label_type, label_text,
-				input_tokens, output_tokens, cache_tokens,
-				input_raw_tokens, cache_write_5m_tokens, cache_write_1h_tokens, model, speed,
-				llm_call_count, user_turn_count,
+				input_tokens, output_tokens, cache_tokens, llm_call_count, user_turn_count,
 				started_at, ended_at, source_file_key, updated_at
 			)
 			select
 				?, ?, ?, ?, ?,
 				?, ?,
 				coalesce(sum(input_tokens), 0), coalesce(sum(output_tokens), 0), coalesce(sum(cache_tokens), 0),
-				coalesce(sum(input_raw_tokens), 0), coalesce(sum(cache_write_5m_tokens), 0),
-				coalesce(sum(cache_write_1h_tokens), 0), ?, ?,
 				count(*), ?,
 				coalesce(min(occurred_at), ?), coalesce(max(occurred_at), ?), ?, ?
 			from usage_calls
@@ -799,11 +685,6 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 				input_tokens = excluded.input_tokens,
 				output_tokens = excluded.output_tokens,
 				cache_tokens = excluded.cache_tokens,
-				input_raw_tokens = excluded.input_raw_tokens,
-				cache_write_5m_tokens = excluded.cache_write_5m_tokens,
-				cache_write_1h_tokens = excluded.cache_write_1h_tokens,
-				model = excluded.model,
-				speed = excluded.speed,
 				llm_call_count = excluded.llm_call_count,
 				user_turn_count = excluded.user_turn_count,
 				started_at = excluded.started_at,
@@ -811,7 +692,7 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 				source_file_key = excluded.source_file_key,
 				updated_at = excluded.updated_at
 		`, provider, parsed.Summary.SessionHash, agentKey, parsed.Agent.ParentKey, parsed.Agent.Depth,
-			parsed.Agent.LabelType, parsed.Agent.LabelText, agentModel, agentSpeed,
+			parsed.Agent.LabelType, parsed.Agent.LabelText,
 			parsed.Summary.UserTurnCount,
 			parsed.Summary.StartedAt, parsed.Summary.EndedAt, fileKey, now,
 			provider, fileKey); err != nil {
@@ -937,40 +818,17 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 	// user_turn_count is left as the root's own human-prompt count (subagents
 	// receive prompts but add no human turns to the rolled-up session).
 	for rootHash := range affectedRoots {
-		// Rolling a subagent's calls up changed the session's call set, so its
-		// dominant model has to be recomputed from the merged rows rather than
-		// left at whatever the root file alone reported.
-		rootModel, rootModelCount, err := dominantModel(ctx, tx,
-			`provider = ? and session_hash = ?`, provider, rootHash)
-		if err != nil {
-			return err
-		}
-		rootSpeed, err := dominantSpeed(ctx, tx,
-			`provider = ? and session_hash = ?`, provider, rootHash)
-		if err != nil {
-			return err
-		}
 		if _, err := tx.ExecContext(ctx, `
 			update sessions set
 				input_tokens = (select coalesce(sum(input_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
 				output_tokens = (select coalesce(sum(output_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
 				cache_tokens = (select coalesce(sum(cache_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
-				input_raw_tokens = (select coalesce(sum(input_raw_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
-				cache_write_5m_tokens = (select coalesce(sum(cache_write_5m_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
-				cache_write_1h_tokens = (select coalesce(sum(cache_write_1h_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
-				model = ?,
-				model_count = ?,
-				speed = ?,
 				llm_call_count = (select count(*) from usage_calls where provider = ? and session_hash = ?),
 				started_at = coalesce((select min(occurred_at) from usage_calls where provider = ? and session_hash = ?), started_at),
 				ended_at = coalesce((select max(occurred_at) from usage_calls where provider = ? and session_hash = ?), ended_at),
 				updated_at = ?, need_sync = 1, synced_at = null
 			where provider = ? and session_hash = ?
-		`, provider, rootHash, provider, rootHash, provider, rootHash,
-			provider, rootHash, provider, rootHash, provider, rootHash,
-			rootModel, rootModelCount, rootSpeed,
-			provider, rootHash, provider, rootHash, provider, rootHash,
-			now, provider, rootHash); err != nil {
+		`, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, now, provider, rootHash); err != nil {
 			return err
 		}
 	}
@@ -986,13 +844,9 @@ func mergeUsageCallsIntoSession(ctx context.Context, tx *sql.Tx, provider string
 			call_index,
 			occurred_at,
 			model,
-			speed,
 			input_tokens,
 			output_tokens,
 			cache_tokens,
-			input_raw_tokens,
-			cache_write_5m_tokens,
-			cache_write_1h_tokens,
 			source_file_key,
 			updated_at
 		)
@@ -1003,13 +857,9 @@ func mergeUsageCallsIntoSession(ctx context.Context, tx *sql.Tx, provider string
 			call_index,
 			occurred_at,
 			model,
-			speed,
 			input_tokens,
 			output_tokens,
 			cache_tokens,
-			input_raw_tokens,
-			cache_write_5m_tokens,
-			cache_write_1h_tokens,
 			source_file_key,
 			updated_at
 		from usage_calls
@@ -1018,13 +868,9 @@ func mergeUsageCallsIntoSession(ctx context.Context, tx *sql.Tx, provider string
 			call_index = excluded.call_index,
 			occurred_at = excluded.occurred_at,
 			model = excluded.model,
-			speed = excluded.speed,
 			input_tokens = excluded.input_tokens,
 			output_tokens = excluded.output_tokens,
 			cache_tokens = excluded.cache_tokens,
-			input_raw_tokens = excluded.input_raw_tokens,
-			cache_write_5m_tokens = excluded.cache_write_5m_tokens,
-			cache_write_1h_tokens = excluded.cache_write_1h_tokens,
 			source_file_key = excluded.source_file_key,
 			updated_at = excluded.updated_at
 	`, newHash, provider, oldHash); err != nil {
@@ -1050,11 +896,6 @@ func mergeSessionAgentsIntoSession(ctx context.Context, tx *sql.Tx, provider str
 			input_tokens,
 			output_tokens,
 			cache_tokens,
-			input_raw_tokens,
-			cache_write_5m_tokens,
-			cache_write_1h_tokens,
-			model,
-			speed,
 			llm_call_count,
 			user_turn_count,
 			started_at,
@@ -1073,11 +914,6 @@ func mergeSessionAgentsIntoSession(ctx context.Context, tx *sql.Tx, provider str
 			input_tokens,
 			output_tokens,
 			cache_tokens,
-			input_raw_tokens,
-			cache_write_5m_tokens,
-			cache_write_1h_tokens,
-			model,
-			speed,
 			llm_call_count,
 			user_turn_count,
 			started_at,
@@ -1094,11 +930,6 @@ func mergeSessionAgentsIntoSession(ctx context.Context, tx *sql.Tx, provider str
 			input_tokens = excluded.input_tokens,
 			output_tokens = excluded.output_tokens,
 			cache_tokens = excluded.cache_tokens,
-			input_raw_tokens = excluded.input_raw_tokens,
-			cache_write_5m_tokens = excluded.cache_write_5m_tokens,
-			cache_write_1h_tokens = excluded.cache_write_1h_tokens,
-			model = case when excluded.model != '' then excluded.model else session_agents.model end,
-			speed = excluded.speed,
 			llm_call_count = excluded.llm_call_count,
 			user_turn_count = excluded.user_turn_count,
 			started_at = excluded.started_at,
@@ -1215,40 +1046,17 @@ func (store *Store) ResolveClaudeTwins(ctx context.Context) error {
 	// rebuild its main agent row as the session total minus its subagents so the
 	// expandable breakdown still sums to the header.
 	for rootHash := range canonical {
-		// The merge changed which calls belong to this session, so the dominant
-		// model has to be recomputed from the merged set rather than kept from
-		// whichever file happened to be parsed last.
-		rootModel, rootModelCount, err := dominantModel(ctx, tx,
-			`provider = ? and session_hash = ?`, provider, rootHash)
-		if err != nil {
-			return err
-		}
-		rootSpeed, err := dominantSpeed(ctx, tx,
-			`provider = ? and session_hash = ?`, provider, rootHash)
-		if err != nil {
-			return err
-		}
 		if _, err := tx.ExecContext(ctx, `
 			update sessions set
 				input_tokens = (select coalesce(sum(input_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
 				output_tokens = (select coalesce(sum(output_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
 				cache_tokens = (select coalesce(sum(cache_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
-				input_raw_tokens = (select coalesce(sum(input_raw_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
-				cache_write_5m_tokens = (select coalesce(sum(cache_write_5m_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
-				cache_write_1h_tokens = (select coalesce(sum(cache_write_1h_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
-				model = ?,
-				model_count = ?,
-				speed = ?,
 				llm_call_count = (select count(*) from usage_calls where provider = ? and session_hash = ?),
 				started_at = coalesce((select min(occurred_at) from usage_calls where provider = ? and session_hash = ?), started_at),
 				ended_at = coalesce((select max(occurred_at) from usage_calls where provider = ? and session_hash = ?), ended_at),
 				updated_at = ?, need_sync = 1, synced_at = null
 			where provider = ? and session_hash = ?
-		`, provider, rootHash, provider, rootHash, provider, rootHash,
-			provider, rootHash, provider, rootHash, provider, rootHash,
-			rootModel, rootModelCount, rootSpeed,
-			provider, rootHash, provider, rootHash, provider, rootHash,
-			now, provider, rootHash); err != nil {
+		`, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, provider, rootHash, now, provider, rootHash); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, `
@@ -1256,15 +1064,10 @@ func (store *Store) ResolveClaudeTwins(ctx context.Context) error {
 				input_tokens = max(0, (select input_tokens from sessions where session_hash = ?) - coalesce((select sum(input_tokens) from session_agents where provider = ? and session_hash = ? and agent_key != 'main'), 0)),
 				output_tokens = max(0, (select output_tokens from sessions where session_hash = ?) - coalesce((select sum(output_tokens) from session_agents where provider = ? and session_hash = ? and agent_key != 'main'), 0)),
 				cache_tokens = max(0, (select cache_tokens from sessions where session_hash = ?) - coalesce((select sum(cache_tokens) from session_agents where provider = ? and session_hash = ? and agent_key != 'main'), 0)),
-				input_raw_tokens = max(0, (select input_raw_tokens from sessions where session_hash = ?) - coalesce((select sum(input_raw_tokens) from session_agents where provider = ? and session_hash = ? and agent_key != 'main'), 0)),
-				cache_write_5m_tokens = max(0, (select cache_write_5m_tokens from sessions where session_hash = ?) - coalesce((select sum(cache_write_5m_tokens) from session_agents where provider = ? and session_hash = ? and agent_key != 'main'), 0)),
-				cache_write_1h_tokens = max(0, (select cache_write_1h_tokens from sessions where session_hash = ?) - coalesce((select sum(cache_write_1h_tokens) from session_agents where provider = ? and session_hash = ? and agent_key != 'main'), 0)),
 				llm_call_count = max(0, (select llm_call_count from sessions where session_hash = ?) - coalesce((select sum(llm_call_count) from session_agents where provider = ? and session_hash = ? and agent_key != 'main'), 0)),
 				updated_at = ?
 			where provider = ? and session_hash = ? and agent_key = 'main'
-		`, rootHash, provider, rootHash, rootHash, provider, rootHash, rootHash, provider, rootHash,
-			rootHash, provider, rootHash, rootHash, provider, rootHash, rootHash, provider, rootHash,
-			rootHash, provider, rootHash, now, provider, rootHash); err != nil {
+		`, rootHash, provider, rootHash, rootHash, provider, rootHash, rootHash, provider, rootHash, rootHash, provider, rootHash, now, provider, rootHash); err != nil {
 			return err
 		}
 	}
@@ -1403,12 +1206,6 @@ func (store *Store) migrate(ctx context.Context) error {
 			input_tokens integer not null,
 			output_tokens integer not null,
 			cache_tokens integer not null,
-			input_raw_tokens integer not null default 0,
-			cache_write_5m_tokens integer not null default 0,
-			cache_write_1h_tokens integer not null default 0,
-			model text not null default '',
-			model_count integer not null default 0,
-			speed text not null default 'standard',
 			updated_at text not null,
 			need_sync integer not null default 1,
 			synced_at text
@@ -1431,13 +1228,9 @@ func (store *Store) migrate(ctx context.Context) error {
 			call_index integer not null,
 			occurred_at text not null,
 			model text,
-			speed text not null default 'standard',
 			input_tokens integer not null,
 			output_tokens integer not null,
 			cache_tokens integer not null,
-			input_raw_tokens integer not null default 0,
-			cache_write_5m_tokens integer not null default 0,
-			cache_write_1h_tokens integer not null default 0,
 			source_file_key text not null,
 			updated_at text not null,
 			primary key(provider, session_hash, call_key),
@@ -1455,11 +1248,6 @@ func (store *Store) migrate(ctx context.Context) error {
 			input_tokens integer not null default 0,
 			output_tokens integer not null default 0,
 			cache_tokens integer not null default 0,
-			input_raw_tokens integer not null default 0,
-			cache_write_5m_tokens integer not null default 0,
-			cache_write_1h_tokens integer not null default 0,
-			model text not null default '',
-			speed text not null default 'standard',
 			llm_call_count integer not null default 0,
 			user_turn_count integer not null default 0,
 			started_at text not null default '',
@@ -1503,9 +1291,6 @@ func (store *Store) migrate(ctx context.Context) error {
 	if _, err = store.db.ExecContext(ctx, `
 		create index if not exists idx_sessions_need_sync on sessions(need_sync, provider, started_at);
 	`); err != nil {
-		return err
-	}
-	if err := store.ensureCostBucketColumns(ctx); err != nil {
 		return err
 	}
 	return store.applyParserVersion(ctx)
@@ -1634,135 +1419,6 @@ func (store *Store) ensureSessionSyncColumns(ctx context.Context) error {
 		}
 	}
 	return nil
-}
-
-// ensureCostBucketColumns adds the finer buckets a rate lookup needs. The legacy
-// input/output/cache columns keep their meaning; the new ones decompose input
-// into raw input plus cache writes split by TTL, and record the billing speed
-// and the session's dominant model. Existing rows default to zero/empty until
-// the parserVersion bump forces a re-parse.
-func (store *Store) ensureCostBucketColumns(ctx context.Context) error {
-	intColumns := []string{"input_raw_tokens", "cache_write_5m_tokens", "cache_write_1h_tokens"}
-	for _, table := range []string{"usage_calls", "sessions", "session_agents"} {
-		for _, column := range intColumns {
-			if err := store.addColumnIfMissing(ctx, table, column, "integer not null default 0"); err != nil {
-				return err
-			}
-		}
-	}
-	for _, table := range []string{"usage_calls", "sessions", "session_agents"} {
-		if err := store.addColumnIfMissing(ctx, table, "speed", "text not null default 'standard'"); err != nil {
-			return err
-		}
-	}
-	for _, table := range []string{"sessions", "session_agents"} {
-		if err := store.addColumnIfMissing(ctx, table, "model", "text not null default ''"); err != nil {
-			return err
-		}
-	}
-	if err := store.addColumnIfMissing(ctx, "sessions", "model_count", "integer not null default 0"); err != nil {
-		return err
-	}
-	return store.backfillCostColumns(ctx)
-}
-
-// backfillCostColumns fills the new columns for rows the parser can no longer
-// reach. The parserVersion bump re-parses every transcript still on disk, but the
-// agents prune their own transcripts, so rows whose file is gone would keep the
-// column defaults forever — a $0 input cost on a row whose input_tokens says
-// otherwise, and a session with no model chip.
-//
-// Buckets: attributing the whole legacy total to raw input restores the invariant
-//
-//	input_tokens = input_raw_tokens + cache_write_5m_tokens + cache_write_1h_tokens
-//
-// for every row, so read-side costing needs no special case. Raw is the cheapest
-// of the three, so the estimate can only undercount, never inflate a bill.
-//
-// Models: usage_calls keeps its per-call model even when the file is gone, so a
-// stale session or agent can recover its chip from its own calls. The ranking
-// matches dominantModel — most tokens first, name as tie-break.
-//
-// Everything here is idempotent and matches nothing once a device has settled;
-// rows whose file is still on disk are overwritten by the re-parse that follows.
-func (store *Store) backfillCostColumns(ctx context.Context) error {
-	for _, table := range []string{"usage_calls", "sessions", "session_agents"} {
-		if _, err := store.db.ExecContext(ctx, `
-			update `+table+` set input_raw_tokens = input_tokens
-			where input_tokens > 0
-			  and input_raw_tokens = 0
-			  and cache_write_5m_tokens = 0
-			  and cache_write_1h_tokens = 0
-		`); err != nil {
-			return err
-		}
-	}
-
-	if _, err := store.db.ExecContext(ctx, `
-		update sessions set
-			model = coalesce((
-				select model from usage_calls
-				where provider = sessions.provider and session_hash = sessions.session_hash
-				  and model is not null and model != ''
-				group by model
-				order by sum(input_tokens + output_tokens + cache_tokens) desc, model
-				limit 1
-			), ''),
-			model_count = (
-				select count(distinct model) from usage_calls
-				where provider = sessions.provider and session_hash = sessions.session_hash
-				  and model is not null and model != ''
-			),
-			speed = coalesce((
-				select speed from usage_calls
-				where provider = sessions.provider and session_hash = sessions.session_hash
-				  and speed is not null and speed != ''
-				group by speed
-				order by sum(input_tokens + output_tokens + cache_tokens) desc, speed
-				limit 1
-			), 'standard')
-		where model = ''
-	`); err != nil {
-		return err
-	}
-
-	// An agent is scoped to one source file rather than to the session, since a
-	// session's files can each run a different model.
-	_, err := store.db.ExecContext(ctx, `
-		update session_agents set
-			model = coalesce((
-				select model from usage_calls
-				where provider = session_agents.provider
-				  and source_file_key = session_agents.source_file_key
-				  and model is not null and model != ''
-				group by model
-				order by sum(input_tokens + output_tokens + cache_tokens) desc, model
-				limit 1
-			), ''),
-			speed = coalesce((
-				select speed from usage_calls
-				where provider = session_agents.provider
-				  and source_file_key = session_agents.source_file_key
-				  and speed is not null and speed != ''
-				group by speed
-				order by sum(input_tokens + output_tokens + cache_tokens) desc, speed
-				limit 1
-			), 'standard')
-		where model = '' and source_file_key != ''
-	`)
-	return err
-}
-
-func (store *Store) addColumnIfMissing(ctx context.Context, table, column, definition string) error {
-	hasColumn, err := store.tableHasColumn(ctx, table, column)
-	if err != nil {
-		return err
-	}
-	if hasColumn {
-		return nil
-	}
-	_, err = store.db.ExecContext(ctx, `alter table `+table+` add column `+column+` `+definition)
-	return err
 }
 
 // ensureSourceFileLinkageColumns adds the raw thread-id columns used to resolve
@@ -1987,63 +1643,6 @@ func normalizeTimestamp(value string) string {
 		return value
 	}
 	return parsed.In(kst).Format(time.RFC3339Nano)
-}
-
-// normalizedSpeed keeps the stored value inside the known vocabulary so a rate
-// lookup never misses on an unexpected string.
-// dominantModel returns the model that consumed the most tokens under the given
-// usage_calls filter, plus how many distinct models appeared. Rates live
-// server-side, so volume is the local proxy for "which model defines this row".
-func dominantModel(ctx context.Context, tx *sql.Tx, where string, args ...any) (string, int, error) {
-	var model sql.NullString
-	err := tx.QueryRowContext(ctx, `
-		select model from usage_calls
-		where `+where+` and model is not null and model != ''
-		group by model
-		order by sum(input_tokens + output_tokens + cache_tokens) desc, model
-		limit 1
-	`, args...).Scan(&model)
-	switch err {
-	case nil, sql.ErrNoRows:
-	default:
-		return "", 0, err
-	}
-	var count int
-	if err := tx.QueryRowContext(ctx, `
-		select count(distinct model) from usage_calls
-		where `+where+` and model is not null and model != ''
-	`, args...).Scan(&count); err != nil {
-		return "", 0, err
-	}
-	return model.String, count, nil
-}
-
-// dominantSpeed returns the billing speed that consumed the most tokens under
-// the given scope. A row can only carry one speed, and standard/fast differ by
-// 2x or more, so the majority side is the least-wrong single answer for a
-// session or agent that toggled mid-run.
-func dominantSpeed(ctx context.Context, tx *sql.Tx, where string, args ...any) (string, error) {
-	var speed sql.NullString
-	err := tx.QueryRowContext(ctx, `
-		select speed from usage_calls
-		where `+where+` and speed is not null and speed != ''
-		group by speed
-		order by sum(input_tokens + output_tokens + cache_tokens) desc, speed
-		limit 1
-	`, args...).Scan(&speed)
-	switch err {
-	case nil, sql.ErrNoRows:
-	default:
-		return "", err
-	}
-	return normalizedSpeed(speed.String), nil
-}
-
-func normalizedSpeed(value string) string {
-	if value == usage.SpeedFast {
-		return usage.SpeedFast
-	}
-	return usage.SpeedStandard
 }
 
 func nullableString(value string) sql.NullString {

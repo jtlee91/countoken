@@ -84,14 +84,9 @@ type threadMeta struct {
 	nickname         string
 }
 
-// tokenUsage mirrors a Codex token_count usage vector. InputTokens is the whole
-// input for the call; CachedInputTokens and CacheWriteInputTokens are subsets of
-// it that bill at their own rates. ReasoningOutputTokens is already counted
-// inside OutputTokens (total_tokens == input + output), so it is informational.
 type tokenUsage struct {
 	InputTokens           int `json:"input_tokens"`
 	CachedInputTokens     int `json:"cached_input_tokens"`
-	CacheWriteInputTokens int `json:"cache_write_input_tokens"`
 	OutputTokens          int `json:"output_tokens"`
 	ReasoningOutputTokens int `json:"reasoning_output_tokens"`
 	TotalTokens           int `json:"total_tokens"`
@@ -101,45 +96,10 @@ type parsedEvent struct {
 	timestamp     string
 	eventType     string
 	turnID        string
-	model         string
-	speed         string
 	totalUsage    tokenUsage
 	lastUsage     tokenUsage
 	hasTotalUsage bool
 	hasLastUsage  bool
-}
-
-// turnContextEvent is the synthetic event type used to carry a turn_context
-// record's model through the same ordered stream as the event_msg records, so a
-// token_count can be attributed to whichever model was configured for its turn.
-const turnContextEvent = "turn_context"
-
-type turnContextPayload struct {
-	Model string `json:"model"`
-}
-
-// threadSettingsPayload carries the billing speed. Codex calls it service_tier
-// and reports "default" or "priority"; priority is what OpenAI now bills as
-// Fast mode (2-2.5x). Absent means default.
-type threadSettingsPayload struct {
-	ThreadSettings struct {
-		ServiceTier string `json:"service_tier"`
-	} `json:"thread_settings"`
-}
-
-const threadSettingsEvent = "thread_settings"
-
-// normalizeTier maps Codex's service_tier onto the shared speed vocabulary.
-// OpenAI renamed priority processing to Fast mode on 2026-07-30 and accepts
-// either spelling, so both have to map to fast — local transcripts still say
-// "priority", and a future Codex that writes "fast" would otherwise be read as
-// standard and billed at half its real rate.
-func normalizeTier(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "priority", "fast":
-		return usage.SpeedFast
-	}
-	return usage.SpeedStandard
 }
 
 func ParseSessionFile(path string) (SessionSummary, error) {
@@ -162,10 +122,6 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 	var calls []usage.UsageCall
 	var meta threadMeta
 	var events []parsedEvent
-	// fallbackModel is the file's first turn_context model. A handful of files
-	// emit a token_count before any turn_context; every observed Codex file uses a
-	// single model, so the first one is the right attribution for those calls.
-	var fallbackModel string
 
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 1024), 64*1024*1024)
@@ -190,39 +146,10 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 				meta = parsedMeta
 				rawSessionID = parsedMeta.id
 			}
-		case "turn_context":
-			// Codex records the model once per turn, not per call. Keep it in the
-			// event stream so the following token_count records inherit it.
-			var payload turnContextPayload
-			if err := json.Unmarshal(current.Payload, &payload); err != nil {
-				return SessionUsage{}, fmt.Errorf("parse turn_context payload: %w", err)
-			}
-			if model := strings.TrimSpace(payload.Model); model != "" {
-				if fallbackModel == "" {
-					fallbackModel = model
-				}
-				events = append(events, parsedEvent{
-					timestamp: current.Timestamp,
-					eventType: turnContextEvent,
-					model:     model,
-				})
-			}
 		case "event_msg":
 			parsed, err := readEventPayload(current.Payload)
 			if err != nil {
 				return SessionUsage{}, err
-			}
-			if parsed.eventType == "thread_settings_applied" {
-				var settings threadSettingsPayload
-				if err := json.Unmarshal(current.Payload, &settings); err != nil {
-					return SessionUsage{}, fmt.Errorf("parse thread_settings payload: %w", err)
-				}
-				events = append(events, parsedEvent{
-					timestamp: current.Timestamp,
-					eventType: threadSettingsEvent,
-					speed:     normalizeTier(settings.ThreadSettings.ServiceTier),
-				})
-				continue
 			}
 			if parsed.eventType == "user_message" || parsed.eventType == "task_started" || parsed.eventType == "token_count" {
 				parsed.timestamp = current.Timestamp
@@ -250,17 +177,8 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 	// state even for inherited records: the first owned event is then compared to
 	// the replay baseline that immediately precedes it.
 	previousTotal := tokenUsage{}
-	// currentModel tracks the most recent turn_context. It is updated even for
-	// replayed (pre-boundary) events so an owned token_count is never left without
-	// a model just because its turn_context sat in the copied prefix.
-	currentModel := fallbackModel
-	currentSpeed := usage.SpeedStandard
 	for index, event := range events {
 		switch event.eventType {
-		case turnContextEvent:
-			currentModel = event.model
-		case threadSettingsEvent:
-			currentSpeed = event.speed
 		case "user_message":
 			if index >= ownedFrom {
 				summary.UserTurnCount++
@@ -284,12 +202,12 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 			summary.EndedAt = timestamp
 			summary.LLMCallCount++
 			tokens := tokenSummary(event.lastUsage)
-			addTokens(&summary.Tokens, tokens)
+			summary.Tokens.Input += tokens.Input
+			summary.Tokens.Output += tokens.Output
+			summary.Tokens.Cache += tokens.Cache
 			calls = append(calls, usage.UsageCall{
 				CallIndex:  summary.LLMCallCount,
 				OccurredAt: timestamp,
-				Model:      currentModel,
-				Speed:      currentSpeed,
 				Tokens:     tokens,
 			})
 		}
@@ -501,35 +419,11 @@ func decodeTokenUsage(raw json.RawMessage) (tokenUsage, bool, error) {
 	return parsed, true, nil
 }
 
-// addTokens accumulates every bucket so the session summary keeps the same
-// decomposition as its calls.
-func addTokens(dst *TokenSummary, src TokenSummary) {
-	dst.Input += src.Input
-	dst.Output += src.Output
-	dst.Cache += src.Cache
-	dst.InputRaw += src.InputRaw
-	dst.CacheWrite5m += src.CacheWrite5m
-	dst.CacheWrite1h += src.CacheWrite1h
-}
-
 func tokenSummary(usage tokenUsage) TokenSummary {
-	// Input keeps its original value (everything not served from cache); the cache
-	// writes are carved out of it so they can be billed at their own rate. Codex
-	// reports no TTL and prices writes at the 5-minute rate.
-	uncached := uncachedInputTokens(usage)
-	write := usage.CacheWriteInputTokens
-	if write < 0 {
-		write = 0
-	}
-	if write > uncached {
-		write = uncached
-	}
 	return TokenSummary{
-		Input:        uncached,
-		Output:       usage.OutputTokens,
-		Cache:        usage.CachedInputTokens,
-		InputRaw:     uncached - write,
-		CacheWrite5m: write,
+		Input:  uncachedInputTokens(usage),
+		Output: usage.OutputTokens,
+		Cache:  usage.CachedInputTokens,
 	}
 }
 

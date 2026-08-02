@@ -12,10 +12,21 @@ type SyncDevice = {
   parser_version?: number;
 };
 
-type DailyUsage = {
+// Cost buckets (input_raw/cache_write_5m/cache_write_1h, speed, model) arrive
+// only from agents at parser version 10 or later. They stay optional here so an
+// older agent keeps syncing successfully; its rows land with the column defaults
+// and fill in once that device upgrades and re-parses.
+type CostBuckets = {
+  input_raw_tokens?: number;
+  cache_write_5m_tokens?: number;
+  cache_write_1h_tokens?: number;
+};
+
+type DailyUsage = CostBuckets & {
   usage_date: string;
   provider: Provider;
   model: string;
+  speed?: string;
   session_count: number;
   llm_call_count: number;
   input_tokens: number;
@@ -26,7 +37,7 @@ type DailyUsage = {
   local_updated_at: string;
 };
 
-type SessionUsage = {
+type SessionUsage = CostBuckets & {
   session_hash: string;
   provider: Provider;
   started_at: string;
@@ -36,10 +47,12 @@ type SessionUsage = {
   input_tokens: number;
   output_tokens: number;
   cache_tokens: number;
+  model?: string;
+  model_count?: number;
   local_updated_at: string;
 };
 
-type SessionAgent = {
+type SessionAgent = CostBuckets & {
   session_hash: string;
   provider: Provider;
   agent_key: string;
@@ -50,6 +63,7 @@ type SessionAgent = {
   input_tokens: number;
   output_tokens: number;
   cache_tokens: number;
+  model?: string;
   llm_call_count: number;
   user_turn_count: number;
   started_at: string;
@@ -121,6 +135,27 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
+// An absent bucket is accepted (pre-v10 agent); a present one must still be a
+// valid count, so a malformed field is rejected rather than silently zeroed.
+function isOptionalCount(value: unknown): boolean {
+  return value === undefined || isNonNegativeInteger(value);
+}
+
+function isOptionalName(value: unknown, maxLength: number): boolean {
+  return value === undefined ||
+    (typeof value === "string" && value.length <= maxLength);
+}
+
+function hasValidCostBuckets(item: Record<string, unknown>): boolean {
+  return isOptionalCount(item.input_raw_tokens) &&
+    isOptionalCount(item.cache_write_5m_tokens) &&
+    isOptionalCount(item.cache_write_1h_tokens);
+}
+
+function isSpeed(value: unknown): boolean {
+  return value === undefined || value === "standard" || value === "fast";
+}
+
 function isDailyUsage(value: unknown): value is DailyUsage {
   if (!value || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
@@ -135,7 +170,9 @@ function isDailyUsage(value: unknown): value is DailyUsage {
     isNonNegativeInteger(item.output_tokens) &&
     isNonNegativeInteger(item.cache_tokens) &&
     typeof item.first_used_at === "string" &&
-    typeof item.last_used_at === "string";
+    typeof item.last_used_at === "string" &&
+    isSpeed(item.speed) &&
+    hasValidCostBuckets(item);
 }
 
 function isSessionUsage(value: unknown): value is SessionUsage {
@@ -151,7 +188,10 @@ function isSessionUsage(value: unknown): value is SessionUsage {
     isNonNegativeInteger(item.llm_call_count) &&
     isNonNegativeInteger(item.input_tokens) &&
     isNonNegativeInteger(item.output_tokens) &&
-    isNonNegativeInteger(item.cache_tokens);
+    isNonNegativeInteger(item.cache_tokens) &&
+    isOptionalName(item.model, 200) &&
+    isOptionalCount(item.model_count) &&
+    hasValidCostBuckets(item);
 }
 
 function isSessionAgent(value: unknown): value is SessionAgent {
@@ -176,7 +216,9 @@ function isSessionAgent(value: unknown): value is SessionAgent {
     isNonNegativeInteger(item.user_turn_count) &&
     typeof item.started_at === "string" &&
     typeof item.ended_at === "string" &&
-    typeof item.local_updated_at === "string";
+    typeof item.local_updated_at === "string" &&
+    isOptionalName(item.model, 200) &&
+    hasValidCostBuckets(item);
 }
 
 function isSessionInventoryItem(value: unknown): value is SessionInventoryItem {
@@ -323,11 +365,15 @@ Deno.serve(async (req: Request) => {
     usage_date: daily.usage_date,
     provider: daily.provider,
     model: daily.model,
+    speed: daily.speed ?? "standard",
     session_count: daily.session_count,
     llm_call_count: daily.llm_call_count,
     input_tokens: daily.input_tokens,
     output_tokens: daily.output_tokens,
     cache_tokens: daily.cache_tokens,
+    input_raw_tokens: daily.input_raw_tokens ?? 0,
+    cache_write_5m_tokens: daily.cache_write_5m_tokens ?? 0,
+    cache_write_1h_tokens: daily.cache_write_1h_tokens ?? 0,
     first_used_at: daily.first_used_at,
     last_used_at: daily.last_used_at,
     local_updated_at: daily.local_updated_at,
@@ -345,6 +391,11 @@ Deno.serve(async (req: Request) => {
     input_tokens: session.input_tokens,
     output_tokens: session.output_tokens,
     cache_tokens: session.cache_tokens,
+    input_raw_tokens: session.input_raw_tokens ?? 0,
+    cache_write_5m_tokens: session.cache_write_5m_tokens ?? 0,
+    cache_write_1h_tokens: session.cache_write_1h_tokens ?? 0,
+    model: session.model ?? "",
+    model_count: session.model_count ?? 0,
     local_updated_at: session.local_updated_at,
     synced_at: syncedAt,
   }));
@@ -361,6 +412,10 @@ Deno.serve(async (req: Request) => {
     input_tokens: agent.input_tokens,
     output_tokens: agent.output_tokens,
     cache_tokens: agent.cache_tokens,
+    input_raw_tokens: agent.input_raw_tokens ?? 0,
+    cache_write_5m_tokens: agent.cache_write_5m_tokens ?? 0,
+    cache_write_1h_tokens: agent.cache_write_1h_tokens ?? 0,
+    model: agent.model ?? "",
     llm_call_count: agent.llm_call_count,
     user_turn_count: agent.user_turn_count,
     started_at: agent.started_at || null,
@@ -409,7 +464,7 @@ Deno.serve(async (req: Request) => {
   if (dailyRows.length > 0) {
     const { error: dailyError } = await supabase
       .from("usage_daily")
-      .upsert(dailyRows, { onConflict: "user_id,device_id,usage_date,provider,model" });
+      .upsert(dailyRows, { onConflict: "user_id,device_id,usage_date,provider,model,speed" });
 
     if (dailyError) {
       return jsonResponse({ error: "database_error", detail: dailyError.message }, 500);

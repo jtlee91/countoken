@@ -100,7 +100,28 @@ insert into public.model_rates (
   ('codex', 'gpt-5.6-luna',  date '2020-01-01', 'long',  'standard',  0.40,  0.50, null, 0.04,  1.80, 272000, ''),
   ('codex', 'gpt-5.6-luna',  date '2020-01-01', 'short', 'fast',      0.40,  0.50, null, 0.04,  2.40, 272000, 'fast mode'),
   ('codex', 'gpt-5.3-codex', date '2020-01-01', 'short', 'standard',  1.75,  null, null, 0.175, 14.00, null, 'no cache-write pricing published'),
-  ('codex', 'gpt-5.3-codex', date '2020-01-01', 'short', 'fast',      3.50,  null, null, 0.35,  28.00, null, 'fast mode')
+  ('codex', 'gpt-5.3-codex', date '2020-01-01', 'short', 'fast',      3.50,  null, null, 0.35,  28.00, null, 'fast mode'),
+  -- The 5.5 and 5.4 generations publish no cache-write price, so those tokens
+  -- fall back to the input rate at read time. Their fast multiplier is 2.5x,
+  -- not the 2x the 5.6 line uses — the reason speed is a stored rate and not a
+  -- derived one.
+  ('codex', 'gpt-5.5',       date '2020-01-01', 'short', 'standard',  5.00,  null, null, 0.50,  30.00, 272000, ''),
+  ('codex', 'gpt-5.5',       date '2020-01-01', 'long',  'standard', 10.00,  null, null, 1.00,  45.00, 272000, ''),
+  ('codex', 'gpt-5.5',       date '2020-01-01', 'short', 'fast',     12.50,  null, null, 1.25,  75.00, 272000, 'fast mode (2.5x)'),
+  ('codex', 'gpt-5.4',       date '2020-01-01', 'short', 'standard',  2.50,  null, null, 0.25,  15.00, 272000, ''),
+  ('codex', 'gpt-5.4',       date '2020-01-01', 'long',  'standard',  5.00,  null, null, 0.50,  22.50, 272000, ''),
+  ('codex', 'gpt-5.4',       date '2020-01-01', 'short', 'fast',      5.00,  null, null, 0.50,  30.00, 272000, 'fast mode'),
+  -- mini and nano have no long-context tier at all, so no threshold either.
+  ('codex', 'gpt-5.4-mini',  date '2020-01-01', 'short', 'standard',  0.75,  null, null, 0.075,  4.50, null, ''),
+  ('codex', 'gpt-5.4-mini',  date '2020-01-01', 'short', 'fast',      1.50,  null, null, 0.15,   9.00, null, 'fast mode'),
+  ('codex', 'gpt-5.4-nano',  date '2020-01-01', 'short', 'standard',  0.20,  null, null, 0.02,   1.25, null, ''),
+  -- The pro tiers publish no cached-input price because they do not support
+  -- caching. Cache read is set to the input rate so that a cached token, if one
+  -- ever appears, bills as an ordinary input token instead of a free one.
+  ('codex', 'gpt-5.5-pro',   date '2020-01-01', 'short', 'standard', 30.00,  null, null, 30.00, 180.00, 272000, 'no prompt caching'),
+  ('codex', 'gpt-5.5-pro',   date '2020-01-01', 'long',  'standard', 60.00,  null, null, 60.00, 270.00, 272000, 'no prompt caching'),
+  ('codex', 'gpt-5.4-pro',   date '2020-01-01', 'short', 'standard', 30.00,  null, null, 30.00, 180.00, 272000, 'no prompt caching'),
+  ('codex', 'gpt-5.4-pro',   date '2020-01-01', 'long',  'standard', 60.00,  null, null, 60.00, 270.00, 272000, 'no prompt caching')
 on conflict do nothing;
 
 -- Models seen in local transcripts but absent from the published price lists:

@@ -66,6 +66,12 @@ insert into public.model_rates (
   ('claude', 'claude-opus-4-8',   date '2020-01-01', 'short', 'standard',  5.00,  6.25, 10.00, 0.50, 25.00, ''),
   ('claude', 'claude-opus-4-7',   date '2020-01-01', 'short', 'standard',  5.00,  6.25, 10.00, 0.50, 25.00, ''),
   ('claude', 'claude-opus-4-6',   date '2020-01-01', 'short', 'standard',  5.00,  6.25, 10.00, 0.50, 25.00, ''),
+  ('claude', 'claude-opus-4-5',   date '2020-01-01', 'short', 'standard',  5.00,  6.25, 10.00, 0.50, 25.00, ''),
+  -- The Opus 4.1 and 4 generation priced 3x the current Opus line. Neither is
+  -- reachable from Claude Code today, but old transcripts still name them and a
+  -- missing row would price that history at nothing.
+  ('claude', 'claude-opus-4-1',   date '2020-01-01', 'short', 'standard', 15.00, 18.75, 30.00, 1.50, 75.00, 'deprecated'),
+  ('claude', 'claude-opus-4',     date '2020-01-01', 'short', 'standard', 15.00, 18.75, 30.00, 1.50, 75.00, 'retired except on Google Cloud'),
   ('claude', 'claude-sonnet-4-6', date '2020-01-01', 'short', 'standard',  3.00,  3.75,  6.00, 0.30, 15.00, ''),
   ('claude', 'claude-sonnet-4-5', date '2020-01-01', 'short', 'standard',  3.00,  3.75,  6.00, 0.30, 15.00, ''),
   ('claude', 'claude-haiku-4-5',  date '2020-01-01', 'short', 'standard',  1.00,  1.25,  2.00, 0.10,  5.00, ''),

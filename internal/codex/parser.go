@@ -120,7 +120,7 @@ type turnContextPayload struct {
 
 // threadSettingsPayload carries the billing speed. Codex calls it service_tier
 // and reports "default" or "priority"; priority is what OpenAI now bills as
-// Fast mode (~2x). Absent means default.
+// Fast mode (2-2.5x). Absent means default.
 type threadSettingsPayload struct {
 	ThreadSettings struct {
 		ServiceTier string `json:"service_tier"`
@@ -130,8 +130,13 @@ type threadSettingsPayload struct {
 const threadSettingsEvent = "thread_settings"
 
 // normalizeTier maps Codex's service_tier onto the shared speed vocabulary.
+// OpenAI renamed priority processing to Fast mode on 2026-07-30 and accepts
+// either spelling, so both have to map to fast — local transcripts still say
+// "priority", and a future Codex that writes "fast" would otherwise be read as
+// standard and billed at half its real rate.
 func normalizeTier(value string) string {
-	if strings.EqualFold(strings.TrimSpace(value), "priority") {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "priority", "fast":
 		return usage.SpeedFast
 	}
 	return usage.SpeedStandard

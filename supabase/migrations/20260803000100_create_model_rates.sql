@@ -74,7 +74,9 @@ insert into public.model_rates (
   ('claude', 'claude-opus-4',     date '2020-01-01', 'short', 'standard', 15.00, 18.75, 30.00, 1.50, 75.00, 'retired except on Google Cloud'),
   ('claude', 'claude-sonnet-4-6', date '2020-01-01', 'short', 'standard',  3.00,  3.75,  6.00, 0.30, 15.00, ''),
   ('claude', 'claude-sonnet-4-5', date '2020-01-01', 'short', 'standard',  3.00,  3.75,  6.00, 0.30, 15.00, ''),
+  ('claude', 'claude-sonnet-4',   date '2020-01-01', 'short', 'standard',  3.00,  3.75,  6.00, 0.30, 15.00, 'retired except on Bedrock and Google Cloud'),
   ('claude', 'claude-haiku-4-5',  date '2020-01-01', 'short', 'standard',  1.00,  1.25,  2.00, 0.10,  5.00, ''),
+  ('claude', 'claude-haiku-3-5',  date '2020-01-01', 'short', 'standard',  0.80,  1.00,  1.60, 0.08,  4.00, 'retired except on Bedrock and Google Cloud'),
   -- Sonnet 5 runs at introductory pricing through 2026-08-31. The September row
   -- is inserted now so the switch needs no action on the day.
   ('claude', 'claude-sonnet-5',   date '2020-01-01', 'short', 'standard',  2.00,  2.50,  4.00, 0.20, 10.00, 'introductory pricing through 2026-08-31'),
@@ -107,6 +109,8 @@ insert into public.model_rates (
   ('codex', 'gpt-5.6-luna',  date '2020-01-01', 'short', 'fast',      0.40,  0.50, null, 0.04,  2.40, 272000, 'fast mode'),
   ('codex', 'gpt-5.3-codex', date '2020-01-01', 'short', 'standard',  1.75,  null, null, 0.175, 14.00, null, 'no cache-write pricing published'),
   ('codex', 'gpt-5.3-codex', date '2020-01-01', 'short', 'fast',      3.50,  null, null, 0.35,  28.00, null, 'fast mode'),
+  ('codex', 'gpt-5.2',       date '2020-01-01', 'short', 'standard',  1.75,  null, null, 0.175, 14.00, null, ''),
+  ('codex', 'gpt-5.2',       date '2020-01-01', 'short', 'fast',      3.50,  null, null, 0.35,  28.00, null, 'fast mode'),
   -- The 5.5 and 5.4 generations publish no cache-write price, so those tokens
   -- fall back to the input rate at read time. Their fast multiplier is 2.5x,
   -- not the 2x the 5.6 line uses — the reason speed is a stored rate and not a

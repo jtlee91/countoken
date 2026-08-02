@@ -47,11 +47,15 @@ export function UsageCompositionCell({
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}
     >
-      <span className="shrink-0 cursor-default whitespace-nowrap text-right font-mono text-sm">
-        <span className="font-black">{formatTokenAmount(totalTokens)}</span>
+      {/* 토큰 위, 금액 아래. 폭을 고정해 두어야 모든 행의 막대가 같은 x에서
+          시작한다. 금액이 없는 행은 자리를 비워 둘 뿐, 폭은 그대로 잡는다. */}
+      <span className="flex w-[80px] shrink-0 cursor-default flex-col items-end whitespace-nowrap font-mono">
+        <span className="text-sm font-black leading-5">
+          {formatTokenAmount(totalTokens)}
+        </span>
         {costUSD === null ? null : (
-          <span className="ml-1 text-[11px] font-extrabold text-muted/70">
-            ({formatApproxUSD(costUSD)})
+          <span className="text-[11px] font-extrabold leading-4 text-muted/70">
+            {formatApproxUSD(costUSD)}
           </span>
         )}
       </span>

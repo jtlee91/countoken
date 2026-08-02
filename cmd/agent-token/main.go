@@ -105,6 +105,7 @@ type remoteSessionUsageItem struct {
 	CacheWrite1hTokens int    `json:"cache_write_1h_tokens"`
 	Model              string `json:"model"`
 	ModelCount         int    `json:"model_count"`
+	Speed              string `json:"speed"`
 	LocalUpdatedAt     string `json:"local_updated_at"`
 }
 
@@ -123,6 +124,7 @@ type remoteSessionAgentItem struct {
 	CacheWrite5mTokens int    `json:"cache_write_5m_tokens"`
 	CacheWrite1hTokens int    `json:"cache_write_1h_tokens"`
 	Model              string `json:"model"`
+	Speed              string `json:"speed"`
 	LLMCallCount       int    `json:"llm_call_count"`
 	UserTurnCount      int    `json:"user_turn_count"`
 	StartedAt          string `json:"started_at"`
@@ -440,6 +442,7 @@ func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, ses
 			CacheWrite1hTokens: row.Tokens.CacheWrite1h,
 			Model:              row.Model,
 			ModelCount:         row.ModelCount,
+			Speed:              row.Speed,
 			LocalUpdatedAt:     row.UpdatedAt,
 		})
 	}
@@ -459,6 +462,7 @@ func buildSyncPayload(device state.LocalDevice, daily []state.DailyUsageRow, ses
 			CacheWrite5mTokens: row.CacheWrite5mTokens,
 			CacheWrite1hTokens: row.CacheWrite1hTokens,
 			Model:              row.Model,
+			Speed:              row.Speed,
 			LLMCallCount:       row.LLMCallCount,
 			UserTurnCount:      row.UserTurnCount,
 			StartedAt:          row.StartedAt,

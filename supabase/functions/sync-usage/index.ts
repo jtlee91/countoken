@@ -12,8 +12,8 @@ type SyncDevice = {
   parser_version?: number;
 };
 
-// Cost buckets (input_raw/cache_write_5m/cache_write_1h, speed, model) arrive
-// only from agents at parser version 10 or later. They stay optional here so an
+// Cost fields arrive only from newer agents: the buckets and model from parser
+// version 10, session and agent speed from 11. They stay optional here so an
 // older agent keeps syncing successfully; its rows land with the column defaults
 // and fill in once that device upgrades and re-parses.
 type CostBuckets = {
@@ -49,6 +49,7 @@ type SessionUsage = CostBuckets & {
   cache_tokens: number;
   model?: string;
   model_count?: number;
+  speed?: string;
   local_updated_at: string;
 };
 
@@ -64,6 +65,7 @@ type SessionAgent = CostBuckets & {
   output_tokens: number;
   cache_tokens: number;
   model?: string;
+  speed?: string;
   llm_call_count: number;
   user_turn_count: number;
   started_at: string;
@@ -191,6 +193,7 @@ function isSessionUsage(value: unknown): value is SessionUsage {
     isNonNegativeInteger(item.cache_tokens) &&
     isOptionalName(item.model, 200) &&
     isOptionalCount(item.model_count) &&
+    isSpeed(item.speed) &&
     hasValidCostBuckets(item);
 }
 
@@ -218,6 +221,7 @@ function isSessionAgent(value: unknown): value is SessionAgent {
     typeof item.ended_at === "string" &&
     typeof item.local_updated_at === "string" &&
     isOptionalName(item.model, 200) &&
+    isSpeed(item.speed) &&
     hasValidCostBuckets(item);
 }
 
@@ -396,6 +400,7 @@ Deno.serve(async (req: Request) => {
     cache_write_1h_tokens: session.cache_write_1h_tokens ?? 0,
     model: session.model ?? "",
     model_count: session.model_count ?? 0,
+    speed: session.speed ?? "standard",
     local_updated_at: session.local_updated_at,
     synced_at: syncedAt,
   }));
@@ -416,6 +421,7 @@ Deno.serve(async (req: Request) => {
     cache_write_5m_tokens: agent.cache_write_5m_tokens ?? 0,
     cache_write_1h_tokens: agent.cache_write_1h_tokens ?? 0,
     model: agent.model ?? "",
+    speed: agent.speed ?? "standard",
     llm_call_count: agent.llm_call_count,
     user_turn_count: agent.user_turn_count,
     started_at: agent.started_at || null,

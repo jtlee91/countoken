@@ -19,7 +19,10 @@ alter table public.usage_sessions
   -- The dominant model by token volume, plus how many distinct models the
   -- session used, so the list can render a chip and a "+N".
   add column if not exists model text not null default '',
-  add column if not exists model_count integer not null default 0;
+  add column if not exists model_count integer not null default 0,
+  -- Fast mode costs 2-2.5x standard, so it has to reach the rate lookup. A row
+  -- holds one speed; a session that toggled mid-run takes its majority side.
+  add column if not exists speed text not null default 'standard';
 
 alter table public.usage_session_agents
   add column if not exists input_raw_tokens bigint not null default 0,
@@ -27,7 +30,8 @@ alter table public.usage_session_agents
   add column if not exists cache_write_1h_tokens bigint not null default 0,
   -- An agent lives in one source file and is effectively single-model, so
   -- grouping agent rows by model yields a session's per-model breakdown.
-  add column if not exists model text not null default '';
+  add column if not exists model text not null default '',
+  add column if not exists speed text not null default 'standard';
 
 -- usage_daily is keyed per (user, device, date, provider, model). Fast mode bills
 -- at a different rate, so it has to split the same way a model does.

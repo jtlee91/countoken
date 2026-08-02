@@ -48,6 +48,12 @@ import (
 // session_hash; Claude call keys are message-identity based (not session scoped)
 // so the shared calls dedupe on merge.
 //
+// v11: sessions and agents carry the dominant billing speed, so a fast-mode
+// session prices at the fast rate. Fast mode is a third of Codex tokens and
+// costs 2-2.5x, which is far too large to round away; the approximation of one
+// speed per row misprices only the minority side of a mixed row, about 1% of
+// tokens locally.
+//
 // v10: cost buckets — cache writes are split by TTL (Claude) and carved out of
 // the uncached input (Codex), the billing speed is recorded, and Codex calls
 // carry the model read from turn_context. The legacy input/output/cache columns
@@ -57,7 +63,7 @@ import (
 // rewritten record timestamps. Only events after the child's own UUIDv7 turn
 // boundary are counted, and repeated cumulative token snapshots are normalized
 // before calls are emitted.
-const parserVersion = 10
+const parserVersion = 11
 
 // ParserVersion exposes the current parsing-logic version so the CLI can report
 // it to the sync server (per-device), making a rollout's reach observable.
@@ -79,6 +85,7 @@ type SourceFile struct {
 type SessionRow struct {
 	Model      string
 	ModelCount int
+	Speed      string
 	Provider   string
 	UpdatedAt  string
 	usage.SessionSummary
@@ -111,6 +118,7 @@ type DailyUsageRow struct {
 
 type SessionAgentRow struct {
 	Model              string
+	Speed              string
 	Provider           string
 	SessionHash        string
 	AgentKey           string
@@ -304,6 +312,7 @@ func (store *Store) ListPendingSessionAgents(ctx context.Context) ([]SessionAgen
 			sa.cache_write_5m_tokens,
 			sa.cache_write_1h_tokens,
 			sa.model,
+			sa.speed,
 			sa.llm_call_count,
 			sa.user_turn_count,
 			sa.started_at,
@@ -339,6 +348,7 @@ func (store *Store) ListPendingSessionAgents(ctx context.Context) ([]SessionAgen
 			&agent.CacheWrite5mTokens,
 			&agent.CacheWrite1hTokens,
 			&agent.Model,
+			&agent.Speed,
 			&agent.LLMCallCount,
 			&agent.UserTurnCount,
 			&agent.StartedAt,
@@ -442,6 +452,7 @@ func (store *Store) listSessions(ctx context.Context, where string) ([]SessionRo
 			cache_write_1h_tokens,
 			model,
 			model_count,
+			speed,
 			updated_at
 		from sessions
 		` + where + `
@@ -471,6 +482,7 @@ func (store *Store) listSessions(ctx context.Context, where string) ([]SessionRo
 			&session.Tokens.CacheWrite1h,
 			&session.Model,
 			&session.ModelCount,
+			&session.Speed,
 			&session.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -665,6 +677,11 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 	if err != nil {
 		return err
 	}
+	sessionSpeed, err := dominantSpeed(ctx, tx,
+		`provider = ? and session_hash = ?`, provider, parsed.Summary.SessionHash)
+	if err != nil {
+		return err
+	}
 
 	if _, err := tx.ExecContext(ctx, `
 		insert into sessions (
@@ -682,6 +699,7 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 			cache_write_1h_tokens,
 			model,
 			model_count,
+			speed,
 			updated_at,
 			need_sync,
 			synced_at
@@ -699,6 +717,7 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 			coalesce(sum(input_raw_tokens), 0),
 			coalesce(sum(cache_write_5m_tokens), 0),
 			coalesce(sum(cache_write_1h_tokens), 0),
+			?,
 			?,
 			?,
 			?,
@@ -720,6 +739,7 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 			cache_write_1h_tokens = excluded.cache_write_1h_tokens,
 			model = excluded.model,
 			model_count = excluded.model_count,
+			speed = excluded.speed,
 			updated_at = excluded.updated_at,
 			need_sync = 1,
 			synced_at = null
@@ -728,7 +748,7 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 		parsed.Summary.UserTurnCount,
 		parsed.Summary.LLMCallCount,
 		parsed.Summary.Tokens.Input, parsed.Summary.Tokens.Output, parsed.Summary.Tokens.Cache,
-		sessionModel, sessionModelCount,
+		sessionModel, sessionModelCount, sessionSpeed,
 		now, provider, parsed.Summary.SessionHash); err != nil {
 		return err
 	}
@@ -745,12 +765,16 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 		if err != nil {
 			return err
 		}
+		agentSpeed, err := dominantSpeed(ctx, tx, `provider = ? and source_file_key = ?`, provider, fileKey)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `
 			insert into session_agents (
 				provider, session_hash, agent_key, parent_agent_key, depth,
 				label_type, label_text,
 				input_tokens, output_tokens, cache_tokens,
-				input_raw_tokens, cache_write_5m_tokens, cache_write_1h_tokens, model,
+				input_raw_tokens, cache_write_5m_tokens, cache_write_1h_tokens, model, speed,
 				llm_call_count, user_turn_count,
 				started_at, ended_at, source_file_key, updated_at
 			)
@@ -759,7 +783,7 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 				?, ?,
 				coalesce(sum(input_tokens), 0), coalesce(sum(output_tokens), 0), coalesce(sum(cache_tokens), 0),
 				coalesce(sum(input_raw_tokens), 0), coalesce(sum(cache_write_5m_tokens), 0),
-				coalesce(sum(cache_write_1h_tokens), 0), ?,
+				coalesce(sum(cache_write_1h_tokens), 0), ?, ?,
 				count(*), ?,
 				coalesce(min(occurred_at), ?), coalesce(max(occurred_at), ?), ?, ?
 			from usage_calls
@@ -776,6 +800,7 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 				cache_write_5m_tokens = excluded.cache_write_5m_tokens,
 				cache_write_1h_tokens = excluded.cache_write_1h_tokens,
 				model = excluded.model,
+				speed = excluded.speed,
 				llm_call_count = excluded.llm_call_count,
 				user_turn_count = excluded.user_turn_count,
 				started_at = excluded.started_at,
@@ -783,7 +808,7 @@ func (store *Store) UpsertParsedSourceFile(ctx context.Context, provider string,
 				source_file_key = excluded.source_file_key,
 				updated_at = excluded.updated_at
 		`, provider, parsed.Summary.SessionHash, agentKey, parsed.Agent.ParentKey, parsed.Agent.Depth,
-			parsed.Agent.LabelType, parsed.Agent.LabelText, agentModel,
+			parsed.Agent.LabelType, parsed.Agent.LabelText, agentModel, agentSpeed,
 			parsed.Summary.UserTurnCount,
 			parsed.Summary.StartedAt, parsed.Summary.EndedAt, fileKey, now,
 			provider, fileKey); err != nil {
@@ -917,6 +942,11 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 		if err != nil {
 			return err
 		}
+		rootSpeed, err := dominantSpeed(ctx, tx,
+			`provider = ? and session_hash = ?`, provider, rootHash)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `
 			update sessions set
 				input_tokens = (select coalesce(sum(input_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
@@ -927,6 +957,7 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 				cache_write_1h_tokens = (select coalesce(sum(cache_write_1h_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
 				model = ?,
 				model_count = ?,
+				speed = ?,
 				llm_call_count = (select count(*) from usage_calls where provider = ? and session_hash = ?),
 				started_at = coalesce((select min(occurred_at) from usage_calls where provider = ? and session_hash = ?), started_at),
 				ended_at = coalesce((select max(occurred_at) from usage_calls where provider = ? and session_hash = ?), ended_at),
@@ -934,7 +965,7 @@ func (store *Store) ResolveSessionRoots(ctx context.Context, provider string) er
 			where provider = ? and session_hash = ?
 		`, provider, rootHash, provider, rootHash, provider, rootHash,
 			provider, rootHash, provider, rootHash, provider, rootHash,
-			rootModel, rootModelCount,
+			rootModel, rootModelCount, rootSpeed,
 			provider, rootHash, provider, rootHash, provider, rootHash,
 			now, provider, rootHash); err != nil {
 			return err
@@ -1020,6 +1051,7 @@ func mergeSessionAgentsIntoSession(ctx context.Context, tx *sql.Tx, provider str
 			cache_write_5m_tokens,
 			cache_write_1h_tokens,
 			model,
+			speed,
 			llm_call_count,
 			user_turn_count,
 			started_at,
@@ -1042,6 +1074,7 @@ func mergeSessionAgentsIntoSession(ctx context.Context, tx *sql.Tx, provider str
 			cache_write_5m_tokens,
 			cache_write_1h_tokens,
 			model,
+			speed,
 			llm_call_count,
 			user_turn_count,
 			started_at,
@@ -1062,6 +1095,7 @@ func mergeSessionAgentsIntoSession(ctx context.Context, tx *sql.Tx, provider str
 			cache_write_5m_tokens = excluded.cache_write_5m_tokens,
 			cache_write_1h_tokens = excluded.cache_write_1h_tokens,
 			model = case when excluded.model != '' then excluded.model else session_agents.model end,
+			speed = excluded.speed,
 			llm_call_count = excluded.llm_call_count,
 			user_turn_count = excluded.user_turn_count,
 			started_at = excluded.started_at,
@@ -1186,6 +1220,11 @@ func (store *Store) ResolveClaudeTwins(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		rootSpeed, err := dominantSpeed(ctx, tx,
+			`provider = ? and session_hash = ?`, provider, rootHash)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.ExecContext(ctx, `
 			update sessions set
 				input_tokens = (select coalesce(sum(input_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
@@ -1196,6 +1235,7 @@ func (store *Store) ResolveClaudeTwins(ctx context.Context) error {
 				cache_write_1h_tokens = (select coalesce(sum(cache_write_1h_tokens), 0) from usage_calls where provider = ? and session_hash = ?),
 				model = ?,
 				model_count = ?,
+				speed = ?,
 				llm_call_count = (select count(*) from usage_calls where provider = ? and session_hash = ?),
 				started_at = coalesce((select min(occurred_at) from usage_calls where provider = ? and session_hash = ?), started_at),
 				ended_at = coalesce((select max(occurred_at) from usage_calls where provider = ? and session_hash = ?), ended_at),
@@ -1203,7 +1243,7 @@ func (store *Store) ResolveClaudeTwins(ctx context.Context) error {
 			where provider = ? and session_hash = ?
 		`, provider, rootHash, provider, rootHash, provider, rootHash,
 			provider, rootHash, provider, rootHash, provider, rootHash,
-			rootModel, rootModelCount,
+			rootModel, rootModelCount, rootSpeed,
 			provider, rootHash, provider, rootHash, provider, rootHash,
 			now, provider, rootHash); err != nil {
 			return err
@@ -1365,6 +1405,7 @@ func (store *Store) migrate(ctx context.Context) error {
 			cache_write_1h_tokens integer not null default 0,
 			model text not null default '',
 			model_count integer not null default 0,
+			speed text not null default 'standard',
 			updated_at text not null,
 			need_sync integer not null default 1,
 			synced_at text
@@ -1415,6 +1456,7 @@ func (store *Store) migrate(ctx context.Context) error {
 			cache_write_5m_tokens integer not null default 0,
 			cache_write_1h_tokens integer not null default 0,
 			model text not null default '',
+			speed text not null default 'standard',
 			llm_call_count integer not null default 0,
 			user_turn_count integer not null default 0,
 			started_at text not null default '',
@@ -1605,8 +1647,10 @@ func (store *Store) ensureCostBucketColumns(ctx context.Context) error {
 			}
 		}
 	}
-	if err := store.addColumnIfMissing(ctx, "usage_calls", "speed", "text not null default 'standard'"); err != nil {
-		return err
+	for _, table := range []string{"usage_calls", "sessions", "session_agents"} {
+		if err := store.addColumnIfMissing(ctx, table, "speed", "text not null default 'standard'"); err != nil {
+			return err
+		}
 	}
 	for _, table := range []string{"sessions", "session_agents"} {
 		if err := store.addColumnIfMissing(ctx, table, "model", "text not null default ''"); err != nil {
@@ -1665,7 +1709,15 @@ func (store *Store) backfillCostColumns(ctx context.Context) error {
 				select count(distinct model) from usage_calls
 				where provider = sessions.provider and session_hash = sessions.session_hash
 				  and model is not null and model != ''
-			)
+			),
+			speed = coalesce((
+				select speed from usage_calls
+				where provider = sessions.provider and session_hash = sessions.session_hash
+				  and speed is not null and speed != ''
+				group by speed
+				order by sum(input_tokens + output_tokens + cache_tokens) desc, speed
+				limit 1
+			), 'standard')
 		where model = ''
 	`); err != nil {
 		return err
@@ -1683,7 +1735,16 @@ func (store *Store) backfillCostColumns(ctx context.Context) error {
 				group by model
 				order by sum(input_tokens + output_tokens + cache_tokens) desc, model
 				limit 1
-			), '')
+			), ''),
+			speed = coalesce((
+				select speed from usage_calls
+				where provider = session_agents.provider
+				  and source_file_key = session_agents.source_file_key
+				  and speed is not null and speed != ''
+				group by speed
+				order by sum(input_tokens + output_tokens + cache_tokens) desc, speed
+				limit 1
+			), 'standard')
 		where model = '' and source_file_key != ''
 	`)
 	return err
@@ -1952,6 +2013,27 @@ func dominantModel(ctx context.Context, tx *sql.Tx, where string, args ...any) (
 		return "", 0, err
 	}
 	return model.String, count, nil
+}
+
+// dominantSpeed returns the billing speed that consumed the most tokens under
+// the given scope. A row can only carry one speed, and standard/fast differ by
+// 2x or more, so the majority side is the least-wrong single answer for a
+// session or agent that toggled mid-run.
+func dominantSpeed(ctx context.Context, tx *sql.Tx, where string, args ...any) (string, error) {
+	var speed sql.NullString
+	err := tx.QueryRowContext(ctx, `
+		select speed from usage_calls
+		where `+where+` and speed is not null and speed != ''
+		group by speed
+		order by sum(input_tokens + output_tokens + cache_tokens) desc, speed
+		limit 1
+	`, args...).Scan(&speed)
+	switch err {
+	case nil, sql.ErrNoRows:
+	default:
+		return "", err
+	}
+	return normalizedSpeed(speed.String), nil
 }
 
 func normalizedSpeed(value string) string {

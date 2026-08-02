@@ -66,10 +66,21 @@ type message struct {
 }
 
 type tokenUsage struct {
-	InputTokens              int `json:"input_tokens"`
-	OutputTokens             int `json:"output_tokens"`
-	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
-	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	InputTokens              int            `json:"input_tokens"`
+	OutputTokens             int            `json:"output_tokens"`
+	CacheCreationInputTokens int            `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int            `json:"cache_read_input_tokens"`
+	CacheCreation            *cacheCreation `json:"cache_creation"`
+	// Speed is "standard" or "fast"; fast mode bills at ~2x.
+	Speed string `json:"speed"`
+}
+
+// cacheCreation splits cache_creation_input_tokens by TTL. The two TTLs bill
+// differently (1.25x vs 2x of the input rate), so the split has to survive into
+// the stored buckets. Older transcripts omit the object entirely.
+type cacheCreation struct {
+	Ephemeral5m int `json:"ephemeral_5m_input_tokens"`
+	Ephemeral1h int `json:"ephemeral_1h_input_tokens"`
 }
 
 type usageEntry struct {
@@ -80,6 +91,7 @@ type usageEntry struct {
 	RequestID   string
 	IsSidechain bool
 	Model       string
+	Speed       string
 	Usage       tokenUsage
 }
 
@@ -184,6 +196,7 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 			RequestID:   strings.TrimSpace(current.RequestID),
 			IsSidechain: current.IsSidechain,
 			Model:       strings.TrimSpace(current.Message.Model),
+			Speed:       normalizeSpeed(current.Message.Usage.Speed),
 			Usage:       *current.Message.Usage,
 		})
 	}
@@ -205,10 +218,14 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 		summary.Tokens.Input += tokens.Input
 		summary.Tokens.Output += tokens.Output
 		summary.Tokens.Cache += tokens.Cache
+		summary.Tokens.InputRaw += tokens.InputRaw
+		summary.Tokens.CacheWrite5m += tokens.CacheWrite5m
+		summary.Tokens.CacheWrite1h += tokens.CacheWrite1h
 		calls = append(calls, usage.UsageCall{
 			CallIndex:  index + 1,
 			OccurredAt: formatKST(entry.Timestamp),
 			Model:      entry.Model,
+			Speed:      entry.Speed,
 			Tokens:     tokens,
 		})
 	}
@@ -417,11 +434,36 @@ func usageTotal(usage tokenUsage) int {
 }
 
 func tokenSummary(usage tokenUsage) TokenSummary {
-	return TokenSummary{
-		Input:  usage.InputTokens + usage.CacheCreationInputTokens,
-		Output: usage.OutputTokens,
-		Cache:  usage.CacheReadInputTokens,
+	// Split the cache writes by TTL. When the transcript predates the
+	// cache_creation object, attribute the whole amount to the 5-minute bucket:
+	// that is the cheaper rate, so an unknown TTL never inflates the estimate.
+	write5m, write1h := usage.CacheCreationInputTokens, 0
+	if usage.CacheCreation != nil {
+		write5m = usage.CacheCreation.Ephemeral5m
+		write1h = usage.CacheCreation.Ephemeral1h
+		if total := write5m + write1h; total != usage.CacheCreationInputTokens {
+			// Trust the flat total and keep the invariant; drop the remainder into
+			// the 5-minute bucket rather than losing tokens.
+			write5m += usage.CacheCreationInputTokens - total
+		}
 	}
+	return TokenSummary{
+		Input:        usage.InputTokens + usage.CacheCreationInputTokens,
+		Output:       usage.OutputTokens,
+		Cache:        usage.CacheReadInputTokens,
+		InputRaw:     usage.InputTokens,
+		CacheWrite5m: write5m,
+		CacheWrite1h: write1h,
+	}
+}
+
+// normalizeSpeed maps Claude's usage.speed onto the shared vocabulary. An empty
+// or unrecognized value means the request ran at the standard rate.
+func normalizeSpeed(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), "fast") {
+		return usage.SpeedFast
+	}
+	return usage.SpeedStandard
 }
 
 func hashSessionID(value string) string {

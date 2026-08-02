@@ -66,18 +66,43 @@ type SessionSummary struct {
 	Tokens        TokenSummary `json:"tokens"`
 }
 
+// TokenSummary carries both the legacy three-bucket view and the finer buckets
+// needed to price a call. Input keeps its original meaning (raw input plus cache
+// writes) so existing rows and the sync payload are unchanged; the new fields
+// decompose it. The invariant Input == InputRaw+CacheWrite5m+CacheWrite1h holds
+// for every provider.
 type TokenSummary struct {
 	Input  int `json:"input"`
 	Output int `json:"output"`
 	Cache  int `json:"cache"`
+
+	// InputRaw is input that was neither served from nor written to the cache.
+	InputRaw int `json:"input_raw"`
+	// CacheWrite5m / CacheWrite1h are cache writes split by TTL because they bill
+	// differently (1.25x vs 2x of input). Codex reports no TTL and prices its
+	// writes at the 5-minute rate, so it fills CacheWrite5m only.
+	CacheWrite5m int `json:"cache_write_5m"`
+	CacheWrite1h int `json:"cache_write_1h"`
 }
+
+// SpeedStandard / SpeedFast are the normalized billing speeds. Fast mode bills
+// at roughly double the standard rate on both providers, so the tier has to be
+// stored alongside the model for a rate lookup to be correct.
+const (
+	SpeedStandard = "standard"
+	SpeedFast     = "fast"
+)
 
 type UsageCall struct {
 	CallKey    string
 	CallIndex  int
 	OccurredAt string
 	Model      string
-	Tokens     TokenSummary
+	// Speed is SpeedStandard or SpeedFast. Claude reports usage.speed
+	// ("standard"/"fast"); Codex reports thread_settings.service_tier
+	// ("default"/"priority"). Both are normalized here.
+	Speed  string
+	Tokens TokenSummary
 }
 
 func HashSessionID(provider string, value string) string {

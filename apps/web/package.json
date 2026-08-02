@@ -9,7 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:data",
-    "test:data": "node --test --experimental-strip-types src/lib/data/usage-session-aggregates.test.ts src/lib/format/tokens.test.ts src/lib/insights/rules.test.ts"
+    "test:data": "node --test --experimental-strip-types src/lib/data/usage-session-aggregates.test.ts src/lib/format/tokens.test.ts src/lib/insights/rules.test.ts src/lib/cost/model-rates.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

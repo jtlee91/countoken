@@ -1,3 +1,11 @@
+import {
+  ModelRateTable,
+  type CostBuckets,
+} from "../cost/model-rates.ts";
+import {
+  computeAgentCost,
+  computeSessionCost,
+} from "../cost/session-cost.ts";
 import type {
   DashboardAgentUsage,
   DashboardDailyUsage,
@@ -11,6 +19,8 @@ import type {
 const KOREA_OFFSET_MS = 9 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// 비용 컬럼은 파서 v10/v11 이상 기기에서만 올라온다. 아직인 기기는 기본값이라
+// 금액이 0이 아니라 "표시하지 않음"으로 떨어진다.
 export type UsageSessionAgentRow = {
   agent_key: string;
   parent_agent_key: string;
@@ -24,6 +34,11 @@ export type UsageSessionAgentRow = {
   user_turn_count: number;
   started_at: string | null;
   ended_at: string | null;
+  input_raw_tokens?: number | null;
+  cache_write_5m_tokens?: number | null;
+  cache_write_1h_tokens?: number | null;
+  model?: string | null;
+  speed?: string | null;
 };
 
 export type UsageSessionAggregateRow = {
@@ -41,6 +56,12 @@ export type UsageSessionAggregateRow = {
   local_updated_at: string;
   synced_at: string | null;
   agents?: UsageSessionAgentRow[] | null;
+  input_raw_tokens?: number | null;
+  cache_write_5m_tokens?: number | null;
+  cache_write_1h_tokens?: number | null;
+  model?: string | null;
+  model_count?: number | null;
+  speed?: string | null;
 };
 
 export type UsageDailyAggregateRow = {
@@ -62,6 +83,8 @@ export type UsageDailyAggregateRow = {
 type SummarizeOptions = {
   now?: Date;
   recentSessionLimit?: number;
+  // 요율표가 없으면 빈 표로 동작한다 — 금액이 0이 아니라 아예 표시되지 않는다.
+  rates?: ModelRateTable;
 };
 
 type DailyUsageOptions = {
@@ -71,6 +94,7 @@ type DailyUsageOptions = {
 type DailyDashboardOptions = DailyUsageOptions & {
   recentSessionRows?: UsageSessionAggregateRow[];
   recentSessionLimit?: number;
+  rates?: ModelRateTable;
 };
 
 export type ViewerWeeklyUsage = {
@@ -315,6 +339,7 @@ export function summarizeUsageDailyDashboard(
 ): DashboardData {
   const now = options.now ?? new Date();
   const recentSessionLimit = options.recentSessionLimit ?? 5;
+  const rates = options.rates ?? new ModelRateTable([]);
   const todayKey = koreaDateKey(startOfKoreaToday(now));
   const weekStartKey = koreaDateKey(startOfKoreaWeek(now));
   const monthStartKey = koreaDateKey(startOfKoreaMonth(now));
@@ -451,7 +476,7 @@ export function summarizeUsageDailyDashboard(
         new Date(right.ended_at).getTime() - new Date(left.ended_at).getTime(),
     )
     .slice(0, recentSessionLimit)
-    .map(toDashboardSession);
+    .map((row) => toDashboardSession(row, rates));
 
   return {
     todayTokens,
@@ -490,8 +515,61 @@ export function summarizeUsageDailyDashboard(
   };
 }
 
-function toDashboardSession(row: UsageSessionAggregateRow): DashboardSession {
+// 비용 컬럼이 아직 안 올라온 기기의 행은 버킷이 전부 0이라, 세션 모델이 있어도
+// 금액이 0으로 계산될 수 있다. 그래서 레거시 input_tokens가 있는데 버킷 합이
+// 0이면 전부 raw input으로 본다 — 셋 중 가장 싼 쪽이라 과대 계상은 없다.
+function bucketsOf(row: {
+  input_tokens: number;
+  output_tokens: number;
+  cache_tokens: number;
+  input_raw_tokens?: number | null;
+  cache_write_5m_tokens?: number | null;
+  cache_write_1h_tokens?: number | null;
+}): CostBuckets {
+  const raw = row.input_raw_tokens ?? 0;
+  const write5m = row.cache_write_5m_tokens ?? 0;
+  const write1h = row.cache_write_1h_tokens ?? 0;
+  const split = raw + write5m + write1h;
+
+  return {
+    inputRawTokens: split === 0 ? row.input_tokens : raw,
+    cacheWrite5mTokens: split === 0 ? 0 : write5m,
+    cacheWrite1hTokens: split === 0 ? 0 : write1h,
+    cacheTokens: row.cache_tokens,
+    outputTokens: row.output_tokens,
+  };
+}
+
+function normalizeSpeed(value: string | null | undefined): string {
+  return value === "fast" ? "fast" : "standard";
+}
+
+function toDashboardSession(
+  row: UsageSessionAggregateRow,
+  rates: ModelRateTable,
+): DashboardSession {
   const deviceLabel = row.device_label?.trim() || "Unknown device";
+  const agents = toSessionAgents(row.agents, row.provider, rates);
+  const model = row.model?.trim() ?? "";
+  const cost = computeSessionCost(
+    {
+      provider: row.provider,
+      model,
+      speed: normalizeSpeed(row.speed),
+      startedAt: row.started_at,
+      buckets: bucketsOf(row),
+      llmCalls: row.llm_call_count,
+    },
+    (row.agents ?? []).map((agent) => ({
+      provider: row.provider,
+      model: agent.model?.trim() ?? "",
+      speed: normalizeSpeed(agent.speed),
+      startedAt: agent.started_at ?? row.started_at,
+      buckets: bucketsOf(agent),
+      llmCalls: agent.llm_call_count,
+    })),
+    rates,
+  );
 
   return {
     sessionHash: row.session_hash,
@@ -509,12 +587,19 @@ function toDashboardSession(row: UsageSessionAggregateRow): DashboardSession {
     totalTokens: rowTotalTokens(row),
     localUpdatedAt: row.local_updated_at,
     syncedAt: row.synced_at,
-    agents: toSessionAgents(row.agents),
+    agents,
+    model,
+    modelCount: row.model_count ?? (model ? 1 : 0),
+    costUSD: cost.totalUSD,
+    costPartial: cost.partial,
+    modelCosts: cost.models,
   };
 }
 
 function toSessionAgents(
   rows: UsageSessionAgentRow[] | null | undefined,
+  provider: string,
+  rates: ModelRateTable,
 ): SessionAgent[] {
   if (!rows || rows.length === 0) {
     return [];
@@ -539,6 +624,18 @@ function toSessionAgents(
       totalTokens: row.input_tokens + row.output_tokens + row.cache_tokens,
       llmCallCount: row.llm_call_count,
       userTurnCount: row.user_turn_count,
+      model: row.model?.trim() ?? "",
+      costUSD: computeAgentCost(
+        {
+          provider,
+          model: row.model?.trim() ?? "",
+          speed: normalizeSpeed(row.speed),
+          startedAt: row.started_at ?? "",
+          buckets: bucketsOf(row),
+          llmCalls: row.llm_call_count,
+        },
+        rates,
+      ),
       startedAt: row.started_at,
       endedAt: row.ended_at,
     }));
@@ -607,6 +704,7 @@ export function summarizeUsageSessions(
 ): DashboardData {
   const now = options.now ?? new Date();
   const recentSessionLimit = options.recentSessionLimit ?? 12;
+  const rates = options.rates ?? new ModelRateTable([]);
   const todayStart = startOfKoreaToday(now);
   const weekStart = startOfKoreaWeek(now);
   const monthStart = startOfKoreaMonth(now);
@@ -740,7 +838,7 @@ export function summarizeUsageSessions(
         new Date(right.ended_at).getTime() - new Date(left.ended_at).getTime(),
     )
     .slice(0, recentSessionLimit)
-    .map(toDashboardSession);
+    .map((row) => toDashboardSession(row, rates));
 
   return {
     todayTokens,

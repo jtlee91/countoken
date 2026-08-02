@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import type { DashboardSession } from "@/lib/data/models";
+import { formatApproxUSD } from "@/lib/format/cost";
 import { formatTokenAmount } from "@/lib/format/tokens";
 import { UsageBreakdownPopover } from "./usage-breakdown-popover";
 
@@ -167,6 +168,25 @@ export function RecentSessionsAccordion({
                       {session.deviceLabel}
                     </dd>
                   </div>
+                  {session.model ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <dt>모델</dt>
+                      <dd className="truncate font-mono text-[11px] font-extrabold text-foreground">
+                        {session.model}
+                        {session.modelCount > 1
+                          ? ` +${session.modelCount - 1}`
+                          : ""}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {session.costUSD === null ? null : (
+                    <div className="flex items-center justify-between gap-3">
+                      <dt>환산 금액</dt>
+                      <dd className="font-mono font-extrabold text-foreground">
+                        {formatApproxUSD(session.costUSD)}
+                      </dd>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-3">
                     <dt>프롬프트 · LLM 호출</dt>
                     <dd className="font-mono font-extrabold text-foreground">

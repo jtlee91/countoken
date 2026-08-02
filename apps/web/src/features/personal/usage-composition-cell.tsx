@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatApproxUSD } from "@/lib/format/cost";
 import { formatTokenAmount } from "@/lib/format/tokens";
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
@@ -13,11 +14,15 @@ export function UsageCompositionCell({
   cacheTokens,
   outputTokens,
   totalTokens,
+  // 요율이 없는 모델은 null로 들어오고, 그때는 괄호 자체를 그리지 않는다.
+  // "—" 같은 자리표시자는 값이 있는 줄과 섞이면 오히려 읽기 나쁘다.
+  costUSD = null,
 }: {
   inputTokens: number;
   cacheTokens: number;
   outputTokens: number;
   totalTokens: number;
+  costUSD?: number | null;
 }) {
   const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
 
@@ -42,8 +47,13 @@ export function UsageCompositionCell({
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}
     >
-      <span className="w-[72px] shrink-0 cursor-default text-right font-mono text-sm font-black">
-        {formatTokenAmount(totalTokens)}
+      <span className="shrink-0 cursor-default whitespace-nowrap text-right font-mono text-sm">
+        <span className="font-black">{formatTokenAmount(totalTokens)}</span>
+        {costUSD === null ? null : (
+          <span className="ml-1 text-[11px] font-extrabold text-muted/70">
+            ({formatApproxUSD(costUSD)})
+          </span>
+        )}
       </span>
       <div className="-my-[5px] min-w-0 flex-1 py-[5px]">
         <div
@@ -89,6 +99,11 @@ export function UsageCompositionCell({
               {numberFormatter.format(totalTokens)}
             </span>{" "}
             토큰
+            {costUSD === null ? null : (
+              <span className="ml-2 font-mono font-black text-white/70">
+                {formatApproxUSD(costUSD)}
+              </span>
+            )}
           </div>
         </div>
       ) : null}

@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
-import type { DashboardSession } from "@/lib/data/models";
+import type { DashboardSession, SessionAgent } from "@/lib/data/models";
 import { formatTokenAmount } from "@/lib/format/tokens";
+import { InfiniteLoadTrigger } from "./infinite-load-trigger";
+import { useSessionAgents } from "./use-session-agents";
 import { UsageBreakdownPopover } from "./usage-breakdown-popover";
 
 const timeFormatter = new Intl.DateTimeFormat("ko-KR", {
@@ -66,6 +68,160 @@ function compositionSegments(session: DashboardSession) {
   ].filter((segment) => segment.width > 0);
 }
 
+function MobileAgentItem({ agent }: { agent: SessionAgent }) {
+  const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState<"up" | "down">("up");
+  const isMain = agent.agentKey === "main";
+  const name = agent.labelText || (isMain ? "메인 턴" : "서브에이전트");
+  const safeTotal = Math.max(agent.totalTokens, 1);
+  const segments = [
+    { label: "입력", value: agent.inputTokens, color: "bg-code-blue" },
+    { label: "캐시", value: agent.cacheTokens, color: "bg-token-green" },
+    { label: "출력", value: agent.outputTokens, color: "bg-badge-gold" },
+  ];
+  const placeUp = !open || placement === "up";
+
+  return (
+    <li
+      className="relative flex items-center gap-1.5 text-xs font-bold"
+      style={{
+        paddingLeft: `${Math.min(agent.depth, 8) * 14}px`,
+        contentVisibility: "auto",
+        containIntrinsicSize: "0 28px",
+      }}
+    >
+      <span className="shrink-0 text-border" aria-hidden="true">
+        └
+      </span>
+      <button
+        type="button"
+        onClick={(event) => {
+          if (open) {
+            setOpen(false);
+            return;
+          }
+          const rect = event.currentTarget.getBoundingClientRect();
+          setPlacement(rect.top > 260 ? "up" : "down");
+          setOpen(true);
+        }}
+        aria-expanded={open}
+        className={`min-w-0 flex-1 truncate text-left ${
+          open ? "text-code-blue" : "text-foreground"
+        }`}
+      >
+        {name}
+      </button>
+      <span className="shrink-0 font-mono font-black text-foreground">
+        {formatTokenAmount(agent.totalTokens)}
+      </span>
+
+      {open ? (
+        <>
+          <button
+            type="button"
+            aria-label="닫기"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-20 cursor-default"
+          />
+          <div
+            className={`absolute left-1/2 z-30 w-[268px] max-w-[calc(100vw-3rem)] -translate-x-1/2 rounded-xl border border-black/20 bg-foreground px-4 py-3 leading-6 text-white shadow-2xl ${
+              placeUp ? "bottom-full mb-2.5" : "top-full mt-2.5"
+            }`}
+          >
+            <div
+              className={`truncate text-[13px] font-black ${isMain ? "mb-2" : ""}`}
+            >
+              {name}
+            </div>
+            {isMain ? null : (
+              <div className="mb-2 text-[10px] font-black uppercase tracking-[0.04em] text-token-green/80">
+                {agent.labelType ? `${agent.labelType} · ` : ""}depth {agent.depth}
+              </div>
+            )}
+            <div className="flex justify-between gap-3 text-xs">
+              <span className="text-white/60">시간</span>
+              <span className="font-mono">
+                {formatHourMinute(agent.startedAt)} → {formatHourMinute(agent.endedAt)}
+              </span>
+            </div>
+            <div className="flex justify-between gap-3 text-xs">
+              <span className="text-white/60">프롬프트 · 호출</span>
+              <span className="font-mono">
+                {agent.userTurnCount} · {agent.llmCallCount}
+              </span>
+            </div>
+            <div className="my-2 border-t border-white/20" />
+            {segments.map((segment) => (
+              <div key={segment.label} className="flex items-center text-xs">
+                <span
+                  className={`mr-2 inline-block size-2 rounded-[3px] ${segment.color}`}
+                />
+                {segment.label}
+                <span className="ml-auto font-mono font-black">
+                  {formatTokenAmount(segment.value)}
+                </span>
+                <span className="ml-2 w-9 text-right font-mono text-white/55">
+                  {Math.round((segment.value / safeTotal) * 100)}%
+                </span>
+              </div>
+            ))}
+            <div className="my-2 border-t border-white/20" />
+            <div className="flex justify-between gap-3 text-xs">
+              <span className="text-white/60">전체</span>
+              <span className="font-mono">
+                {agent.totalTokens.toLocaleString("ko-KR")} 토큰
+              </span>
+            </div>
+            <span
+              className={`absolute left-1/2 size-3 -translate-x-1/2 rotate-45 bg-foreground ${
+                placeUp
+                  ? "-bottom-1.5 border-b border-r border-black/20"
+                  : "-top-1.5 border-l border-t border-black/20"
+              }`}
+            />
+          </div>
+        </>
+      ) : null}
+    </li>
+  );
+}
+
+function MobileSessionAgents({
+  session,
+  open,
+}: {
+  session: DashboardSession;
+  open: boolean;
+}) {
+  const { agents, loading, error, hasMore, loadMore } = useSessionAgents(
+    session,
+    open,
+  );
+
+  if (session.subagentCount === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 border-t border-border pt-2.5">
+      <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.04em] text-muted">
+        서브에이전트 {session.subagentCount.toLocaleString("ko-KR")}
+      </p>
+      <ul className="space-y-1.5">
+        {agents.map((agent) => (
+          <MobileAgentItem key={agent.agentKey} agent={agent} />
+        ))}
+      </ul>
+      <InfiniteLoadTrigger
+        hasMore={hasMore}
+        loading={loading}
+        error={error}
+        onLoadMore={() => void loadMore()}
+      />
+    </div>
+  );
+}
+
 // 모바일 전용 — 한 줄 요약을 탭하면 세션 상세가 펼쳐진다
 export function RecentSessionsAccordion({
   sessions,
@@ -74,8 +230,6 @@ export function RecentSessionsAccordion({
 }) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [barOpen, setBarOpen] = useState(false);
-  const [openAgent, setOpenAgent] = useState<string | null>(null);
-  const [agentPlacement, setAgentPlacement] = useState<"up" | "down">("up");
 
   return (
     <div className="sm:hidden">
@@ -90,7 +244,6 @@ export function RecentSessionsAccordion({
               onClick={() => {
                 setOpenKey(open ? null : key);
                 setBarOpen(false);
-                setOpenAgent(null);
               }}
               aria-expanded={open}
               className="flex min-h-12 w-full items-center gap-2 py-3 text-left"
@@ -98,6 +251,11 @@ export function RecentSessionsAccordion({
               <span className="min-w-0 flex-1 truncate text-sm font-black">
                 {session.providerLabel}
               </span>
+              {session.subagentCount > 0 ? (
+                <span className="shrink-0 rounded-full bg-code-blue/10 px-2 py-0.5 text-[10px] font-black text-code-blue">
+                  서브 {session.subagentCount.toLocaleString("ko-KR")}
+                </span>
+              ) : null}
               <span className="shrink-0 font-mono text-[11px] font-extrabold text-muted">
                 {formatTimestamp(session.startedAt)}
               </span>
@@ -175,174 +333,7 @@ export function RecentSessionsAccordion({
                     </dd>
                   </div>
                 </dl>
-                {session.agents.filter((agent) => agent.agentKey !== "main")
-                  .length > 0 ? (
-                  <div className="mt-3 border-t border-border pt-2.5">
-                    <p className="mb-1.5 text-[10px] font-black uppercase tracking-[0.04em] text-muted">
-                      서브에이전트{" "}
-                      {
-                        session.agents.filter(
-                          (agent) => agent.agentKey !== "main",
-                        ).length
-                      }
-                    </p>
-                    <ul className="space-y-1.5">
-                      {session.agents.map((agent) => {
-                        const isMain = agent.agentKey === "main";
-                        const name =
-                          agent.labelText ||
-                          (isMain ? "메인 턴" : "서브에이전트");
-                        const agentId = `${key}::${agent.agentKey}`;
-                        const popOpen = openAgent === agentId;
-                        const safeTotal = Math.max(agent.totalTokens, 1);
-                        const segments = [
-                          {
-                            label: "입력",
-                            value: agent.inputTokens,
-                            color: "bg-code-blue",
-                          },
-                          {
-                            label: "캐시",
-                            value: agent.cacheTokens,
-                            color: "bg-token-green",
-                          },
-                          {
-                            label: "출력",
-                            value: agent.outputTokens,
-                            color: "bg-badge-gold",
-                          },
-                        ];
-
-                        const placeUp = !popOpen || agentPlacement === "up";
-
-                        return (
-                          <li
-                            key={agent.agentKey}
-                            className="relative flex items-center gap-1.5 text-xs font-bold"
-                            style={{
-                              paddingLeft: `${Math.min(agent.depth, 8) * 14}px`,
-                            }}
-                          >
-                            <span
-                              className="shrink-0 text-border"
-                              aria-hidden="true"
-                            >
-                              └
-                            </span>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                if (popOpen) {
-                                  setOpenAgent(null);
-                                  return;
-                                }
-                                // 위 공간이 부족하면 아래로 띄운다.
-                                const rect =
-                                  event.currentTarget.getBoundingClientRect();
-                                setAgentPlacement(rect.top > 260 ? "up" : "down");
-                                setOpenAgent(agentId);
-                              }}
-                              aria-expanded={popOpen}
-                              className={`min-w-0 flex-1 truncate text-left ${
-                                popOpen ? "text-code-blue" : "text-foreground"
-                              }`}
-                            >
-                              {name}
-                            </button>
-                            <span className="shrink-0 font-mono font-black text-foreground">
-                              {formatTokenAmount(agent.totalTokens)}
-                            </span>
-
-                            {popOpen ? (
-                              <>
-                                <button
-                                  type="button"
-                                  aria-label="닫기"
-                                  onClick={() => setOpenAgent(null)}
-                                  className="fixed inset-0 z-20 cursor-default"
-                                />
-                                <div
-                                  className={`absolute left-1/2 z-30 w-[268px] max-w-[calc(100vw-3rem)] -translate-x-1/2 rounded-xl border border-black/20 bg-foreground px-4 py-3 leading-6 text-white shadow-2xl ${
-                                    placeUp
-                                      ? "bottom-full mb-2.5"
-                                      : "top-full mt-2.5"
-                                  }`}
-                                >
-                                  <div
-                                    className={`truncate text-[13px] font-black ${
-                                      isMain ? "mb-2" : ""
-                                    }`}
-                                  >
-                                    {name}
-                                  </div>
-                                  {isMain ? null : (
-                                    <div className="mb-2 text-[10px] font-black uppercase tracking-[0.04em] text-token-green/80">
-                                      {agent.labelType
-                                        ? `${agent.labelType} · `
-                                        : ""}
-                                      depth {agent.depth}
-                                    </div>
-                                  )}
-                                  <div className="flex justify-between gap-3 text-xs">
-                                    <span className="text-white/60">시간</span>
-                                    <span className="font-mono">
-                                      {formatHourMinute(agent.startedAt)} →{" "}
-                                      {formatHourMinute(agent.endedAt)}
-                                    </span>
-                                  </div>
-                                  <div className="flex justify-between gap-3 text-xs">
-                                    <span className="text-white/60">
-                                      프롬프트 · 호출
-                                    </span>
-                                    <span className="font-mono">
-                                      {agent.userTurnCount} · {agent.llmCallCount}
-                                    </span>
-                                  </div>
-                                  <div className="my-2 border-t border-white/20" />
-                                  {segments.map((segment) => (
-                                    <div
-                                      key={segment.label}
-                                      className="flex items-center text-xs"
-                                    >
-                                      <span
-                                        className={`mr-2 inline-block size-2 rounded-[3px] ${segment.color}`}
-                                      />
-                                      {segment.label}
-                                      <span className="ml-auto font-mono font-black">
-                                        {formatTokenAmount(segment.value)}
-                                      </span>
-                                      <span className="ml-2 w-9 text-right font-mono text-white/55">
-                                        {Math.round(
-                                          (segment.value / safeTotal) * 100,
-                                        )}
-                                        %
-                                      </span>
-                                    </div>
-                                  ))}
-                                  <div className="my-2 border-t border-white/20" />
-                                  <div className="flex justify-between gap-3 text-xs">
-                                    <span className="text-white/60">전체</span>
-                                    <span className="font-mono">
-                                      {agent.totalTokens.toLocaleString("ko-KR")}{" "}
-                                      토큰
-                                    </span>
-                                  </div>
-                                  <span
-                                    className={`absolute left-1/2 size-3 -translate-x-1/2 rotate-45 bg-foreground ${
-                                      placeUp
-                                        ? "-bottom-1.5 border-b border-r border-black/20"
-                                        : "-top-1.5 border-l border-t border-black/20"
-                                    }`}
-                                  />
-                                </div>
-                              </>
-                            ) : null}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                ) : null}
+                <MobileSessionAgents session={session} open={open} />
               </div>
             ) : null}
           </div>

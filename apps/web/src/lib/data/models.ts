@@ -115,8 +115,16 @@ export type DashboardSession = {
   totalTokens: number;
   localUpdatedAt: string;
   syncedAt: string | null;
-  // 서브에이전트 분해. 2개 이상일 때만 펼침 UI를 노출한다(메인 턴 + 서브 N).
+  // 목록에는 전체 개수만 싣고, 상세 행은 펼칠 때 페이지 단위로 불러온다.
+  subagentCount: number;
+  // fixture/비-Supabase 공급자는 초기 상세를 함께 제공할 수 있다.
   agents: SessionAgent[];
+};
+
+export type SessionAgentsPage = {
+  agents: SessionAgent[];
+  total: number;
+  nextOffset: number | null;
 };
 
 // 기간별 에이전트/토큰 구성 분해 — 히어로 지표 호버 상세에 사용한다

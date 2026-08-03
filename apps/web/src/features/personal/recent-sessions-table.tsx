@@ -5,7 +5,9 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 
 import type { DashboardSession, SessionAgent } from "@/lib/data/models";
 import { formatTokenAmount } from "@/lib/format/tokens";
+import { InfiniteLoadTrigger } from "./infinite-load-trigger";
 import { UsageCompositionCell } from "./usage-composition-cell";
+import { useSessionAgents } from "./use-session-agents";
 
 const tooltipNumberFormatter = new Intl.NumberFormat("ko-KR");
 
@@ -82,10 +84,6 @@ function SessionTimeCell({
   );
 }
 
-function subagentCount(session: DashboardSession) {
-  return session.agents.filter((agent) => agent.agentKey !== "main").length;
-}
-
 function PromptsCalls({
   userTurnCount,
   llmCallCount,
@@ -121,7 +119,10 @@ function AgentRow({ agent }: { agent: SessionAgent }) {
     cursor !== null && cursor.x + 14 + 260 > window.innerWidth;
 
   return (
-    <tr className="bg-code-blue/[0.035]">
+    <tr
+      className="bg-code-blue/[0.035]"
+      style={{ contentVisibility: "auto", containIntrinsicSize: "0 45px" }}
+    >
       <td className="border-b border-border/70 px-3 py-2.5">
         <div
           className="flex items-center gap-1.5 text-[13px] font-extrabold text-foreground/90"
@@ -222,13 +223,107 @@ function AgentRow({ agent }: { agent: SessionAgent }) {
   );
 }
 
+function SessionRows({ session }: { session: DashboardSession }) {
+  const [open, setOpen] = useState(false);
+  const expandable = session.subagentCount > 0;
+  const { agents, loading, error, hasMore, loadMore } = useSessionAgents(
+    session,
+    open,
+  );
+  const key = `${session.provider}-${session.sessionHash}`;
+  const toggle = () => setOpen((value) => !value);
+
+  return (
+    <Fragment>
+      <tr className={expandable ? "cursor-pointer" : undefined}>
+        <td
+          className="border-b border-border px-3 py-3"
+          onClick={expandable ? toggle : undefined}
+        >
+          <span className="flex items-center gap-1.5 font-black">
+            <span
+              aria-hidden="true"
+              className="flex w-[13px] shrink-0 items-center justify-center text-muted"
+            >
+              {expandable ? (
+                open ? (
+                  <ChevronDown size={13} />
+                ) : (
+                  <ChevronRight size={13} />
+                )
+              ) : null}
+            </span>
+            {session.providerLabel}
+          </span>
+          <span
+            className="mt-[3px] block max-w-[12rem] truncate pl-[19px] text-[11px] font-extrabold text-muted"
+            title={session.deviceLabel}
+          >
+            {session.deviceLabel}
+          </span>
+        </td>
+        <td className="border-b border-border px-3 py-3">
+          <SessionTimeCell
+            startedAt={session.startedAt}
+            endedAt={session.endedAt}
+          />
+        </td>
+        <td className="whitespace-nowrap border-b border-border px-3 py-3 text-center font-mono">
+          <PromptsCalls
+            userTurnCount={session.userTurnCount}
+            llmCallCount={session.llmCallCount}
+          />
+          {expandable ? (
+            <div className="mt-1.5">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  toggle();
+                }}
+                aria-expanded={open}
+                className="rounded-full bg-code-blue/10 px-2 py-0.5 text-[10px] font-black text-code-blue"
+              >
+                서브 {numberFormatter.format(session.subagentCount)}
+              </button>
+            </div>
+          ) : null}
+        </td>
+        <td className="border-b border-border px-3 py-3">
+          <UsageCompositionCell
+            inputTokens={session.inputTokens}
+            cacheTokens={session.cacheTokens}
+            outputTokens={session.outputTokens}
+            totalTokens={session.totalTokens}
+          />
+        </td>
+      </tr>
+      {open
+        ? agents.map((agent) => (
+            <AgentRow key={`${key}-${agent.agentKey}`} agent={agent} />
+          ))
+        : null}
+      {open && (hasMore || loading || error) ? (
+        <tr>
+          <td colSpan={4} className="border-b border-border/70 bg-code-blue/[0.02]">
+            <InfiniteLoadTrigger
+              hasMore={hasMore}
+              loading={loading}
+              error={error}
+              onLoadMore={() => void loadMore()}
+            />
+          </td>
+        </tr>
+      ) : null}
+    </Fragment>
+  );
+}
+
 export function RecentSessionsTable({
   sessions,
 }: {
   sessions: DashboardSession[];
 }) {
-  const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
-
   return (
     <div className="hidden overflow-x-auto sm:block">
       <table className="w-full min-w-[640px] table-fixed border-separate border-spacing-0 text-left text-sm">
@@ -251,91 +346,12 @@ export function RecentSessionsTable({
           </tr>
         </thead>
         <tbody>
-          {sessions.map((session) => {
-            const key = `${session.provider}-${session.sessionHash}`;
-            const subCount = subagentCount(session);
-            const expandable = subCount > 0 && session.agents.length > 1;
-            const open = expandable && openKeys.has(key);
-            const toggle = () =>
-              setOpenKeys((prev) => {
-                const next = new Set(prev);
-                if (next.has(key)) {
-                  next.delete(key);
-                } else {
-                  next.add(key);
-                }
-                return next;
-              });
-
-            return (
-              <Fragment key={key}>
-                <tr className={expandable ? "cursor-pointer" : undefined}>
-                  <td
-                    className="border-b border-border px-3 py-3"
-                    onClick={expandable ? toggle : undefined}
-                  >
-                    <span className="flex items-center gap-1.5 font-black">
-                      <span
-                        aria-hidden="true"
-                        className="flex w-[13px] shrink-0 items-center justify-center text-muted"
-                      >
-                        {expandable ? (
-                          open ? (
-                            <ChevronDown size={13} />
-                          ) : (
-                            <ChevronRight size={13} />
-                          )
-                        ) : null}
-                      </span>
-                      {session.providerLabel}
-                    </span>
-                    <span
-                      className="mt-[3px] block max-w-[12rem] truncate pl-[19px] text-[11px] font-extrabold text-muted"
-                      title={session.deviceLabel}
-                    >
-                      {session.deviceLabel}
-                    </span>
-                  </td>
-                  <td className="border-b border-border px-3 py-3">
-                    <SessionTimeCell
-                      startedAt={session.startedAt}
-                      endedAt={session.endedAt}
-                    />
-                  </td>
-                  <td className="whitespace-nowrap border-b border-border px-3 py-3 text-center font-mono">
-                    <PromptsCalls
-                      userTurnCount={session.userTurnCount}
-                      llmCallCount={session.llmCallCount}
-                    />
-                    {expandable ? (
-                      <div className="mt-1.5">
-                        <button
-                          type="button"
-                          onClick={toggle}
-                          className="rounded-full bg-code-blue/10 px-2 py-0.5 text-[10px] font-black text-code-blue"
-                        >
-                          서브 {subCount}
-                        </button>
-                      </div>
-                    ) : null}
-                  </td>
-                  <td className="border-b border-border px-3 py-3">
-                    <UsageCompositionCell
-                      inputTokens={session.inputTokens}
-                      cacheTokens={session.cacheTokens}
-                      outputTokens={session.outputTokens}
-                      totalTokens={session.totalTokens}
-                    />
-                  </td>
-                </tr>
-                {open
-                  ? session.agents.map((agent) => (
-                      <AgentRow key={`${key}-${agent.agentKey}`} agent={agent} />
-                    ))
-                  : null}
-              </Fragment>
-            );
-          })}
+          {sessions.map((session) => (
+            <SessionRows
+              key={`${session.provider}-${session.sessionHash}`}
+              session={session}
+            />
+          ))}
         </tbody>
       </table>
     </div>

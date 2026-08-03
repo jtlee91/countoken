@@ -5,6 +5,7 @@ import type {
   DashboardSession,
   DashboardTokenBreakdown,
   SessionAgent,
+  SessionAgentsPage,
   UsageBreakdownSummary,
 } from "./models.ts";
 
@@ -40,6 +41,7 @@ export type UsageSessionAggregateRow = {
   cache_tokens: number;
   local_updated_at: string;
   synced_at: string | null;
+  subagent_count?: number | null;
   agents?: UsageSessionAgentRow[] | null;
 };
 
@@ -492,6 +494,10 @@ export function summarizeUsageDailyDashboard(
 
 function toDashboardSession(row: UsageSessionAggregateRow): DashboardSession {
   const deviceLabel = row.device_label?.trim() || "Unknown device";
+  const agents = toSessionAgents(row.agents);
+  const derivedSubagentCount = agents.filter(
+    (agent) => agent.agentKey !== "main",
+  ).length;
 
   return {
     sessionHash: row.session_hash,
@@ -509,7 +515,42 @@ function toDashboardSession(row: UsageSessionAggregateRow): DashboardSession {
     totalTokens: rowTotalTokens(row),
     localUpdatedAt: row.local_updated_at,
     syncedAt: row.synced_at,
-    agents: toSessionAgents(row.agents),
+    subagentCount: Math.max(0, row.subagent_count ?? derivedSubagentCount),
+    agents,
+  };
+}
+
+export function toSessionAgent(row: UsageSessionAgentRow): SessionAgent {
+  return {
+    agentKey: row.agent_key,
+    parentAgentKey: row.parent_agent_key,
+    depth: row.depth,
+    labelType: row.label_type,
+    labelText: row.label_text,
+    inputTokens: row.input_tokens,
+    outputTokens: row.output_tokens,
+    cacheTokens: row.cache_tokens,
+    totalTokens: row.input_tokens + row.output_tokens + row.cache_tokens,
+    llmCallCount: row.llm_call_count,
+    userTurnCount: row.user_turn_count,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+  };
+}
+
+export function toSessionAgentsPage(
+  rows: UsageSessionAgentRow[],
+  totalCount: number | null,
+  offset: number,
+): SessionAgentsPage {
+  const agents = rows.map(toSessionAgent);
+  const total = totalCount ?? offset + agents.length;
+  const consumed = offset + agents.length;
+
+  return {
+    agents,
+    total,
+    nextOffset: consumed < total ? consumed : null,
   };
 }
 
@@ -527,21 +568,7 @@ function toSessionAgents(
         row.input_tokens + row.output_tokens + row.cache_tokens > 0 ||
         row.llm_call_count > 0,
     )
-    .map((row) => ({
-      agentKey: row.agent_key,
-      parentAgentKey: row.parent_agent_key,
-      depth: row.depth,
-      labelType: row.label_type,
-      labelText: row.label_text,
-      inputTokens: row.input_tokens,
-      outputTokens: row.output_tokens,
-      cacheTokens: row.cache_tokens,
-      totalTokens: row.input_tokens + row.output_tokens + row.cache_tokens,
-      llmCallCount: row.llm_call_count,
-      userTurnCount: row.user_turn_count,
-      startedAt: row.started_at,
-      endedAt: row.ended_at,
-    }));
+    .map(toSessionAgent);
 
   return orderAgentsAsTree(agents);
 }

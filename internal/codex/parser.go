@@ -37,6 +37,17 @@ type eventPayload struct {
 	LastTokenUsage  json.RawMessage `json:"last_token_usage"`
 }
 
+type responseItemContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+type responseItemPayload struct {
+	Type    string                `json:"type"`
+	Role    string                `json:"role"`
+	Content []responseItemContent `json:"content"`
+}
+
 type tokenInfo struct {
 	TotalTokenUsage json.RawMessage `json:"total_token_usage"`
 	LastTokenUsage  json.RawMessage `json:"last_token_usage"`
@@ -96,6 +107,8 @@ type parsedEvent struct {
 	timestamp     string
 	eventType     string
 	turnID        string
+	userSource    string
+	injected      bool
 	totalUsage    tokenUsage
 	lastUsage     tokenUsage
 	hasTotalUsage bool
@@ -155,6 +168,15 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 				parsed.timestamp = current.Timestamp
 				events = append(events, parsed)
 			}
+		case "response_item":
+			parsed, ok, err := readResponseItemPayload(current.Payload)
+			if err != nil {
+				return SessionUsage{}, err
+			}
+			if ok {
+				parsed.timestamp = current.Timestamp
+				events = append(events, parsed)
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -177,11 +199,20 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 	// state even for inherited records: the first owned event is then compared to
 	// the replay baseline that immediately precedes it.
 	previousTotal := tokenUsage{}
+	legacyUserTurns := 0
+	responseItemUserTurns := 0
 	for index, event := range events {
 		switch event.eventType {
 		case "user_message":
-			if index >= ownedFrom {
-				summary.UserTurnCount++
+			if index < ownedFrom {
+				continue
+			}
+			if event.userSource == "response_item" {
+				if !event.injected {
+					responseItemUserTurns++
+				}
+			} else {
+				legacyUserTurns++
 			}
 		case "token_count":
 			changed := true
@@ -211,6 +242,15 @@ func ParseSessionUsage(path string) (SessionUsage, error) {
 				Tokens:     tokens,
 			})
 		}
+	}
+	// Legacy rollouts contain both event_msg/user_message and response_item
+	// copies of the same prompts. Prefer the legacy count when present; only use
+	// response_item as the fallback for newer rollouts that stopped emitting the
+	// legacy event.
+	if legacyUserTurns > 0 {
+		summary.UserTurnCount = legacyUserTurns
+	} else {
+		summary.UserTurnCount = responseItemUserTurns
 	}
 	if rawSessionID != "" {
 		summary.SessionHash = hashSessionID(rawSessionID)
@@ -378,6 +418,9 @@ func readEventPayload(raw json.RawMessage) (parsedEvent, error) {
 		eventType: payload.Type,
 		turnID:    strings.TrimSpace(payload.TurnID),
 	}
+	if payload.Type == "user_message" {
+		result.userSource = "event_msg"
+	}
 	if payload.Type != "token_count" {
 		return result, nil
 	}
@@ -408,6 +451,43 @@ func readEventPayload(raw json.RawMessage) (parsedEvent, error) {
 		}
 	}
 	return result, nil
+}
+
+// readResponseItemPayload supports newer Codex rollouts that serialize user
+// input as response_item/message records instead of event_msg/user_message.
+// Multiple user-role records can belong to one turn because steering input may
+// arrive while a task is running. Count those records individually, excluding
+// only the context records Codex injects before the human prompt.
+func readResponseItemPayload(raw json.RawMessage) (parsedEvent, bool, error) {
+	var payload responseItemPayload
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return parsedEvent{}, false, fmt.Errorf("parse response_item payload: %w", err)
+	}
+	if payload.Type != "message" || payload.Role != "user" {
+		return parsedEvent{}, false, nil
+	}
+	return parsedEvent{
+		eventType:  "user_message",
+		userSource: "response_item",
+		injected:   isInjectedContext(payload.Content),
+	}, true, nil
+}
+
+func isInjectedContext(content []responseItemContent) bool {
+	if len(content) == 0 {
+		return false
+	}
+	for _, part := range content {
+		if part.Type != "input_text" {
+			return false
+		}
+		text := strings.TrimSpace(part.Text)
+		if !strings.HasPrefix(text, "# AGENTS.md instructions") &&
+			!strings.HasPrefix(text, "<environment_context>") {
+			return false
+		}
+	}
+	return true
 }
 
 func decodeTokenUsage(raw json.RawMessage) (tokenUsage, bool, error) {

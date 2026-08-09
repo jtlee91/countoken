@@ -57,7 +57,11 @@ import (
 // even when they own no token calls. Descendants can therefore resolve through
 // zero-usage intermediate threads to the real root instead of appearing as
 // separate sessions.
-const parserVersion = 10
+//
+// v11: newer Codex rollouts write user prompts as response_item/message records.
+// Use those only when legacy event_msg/user_message records are absent, and
+// exclude injected agent/environment context from the fallback prompt count.
+const parserVersion = 11
 
 // ParserVersion exposes the current parsing-logic version so the CLI can report
 // it to the sync server (per-device), making a rollout's reach observable.

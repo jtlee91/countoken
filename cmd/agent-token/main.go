@@ -347,15 +347,75 @@ func runSync(args []string, stdout io.Writer) error {
 		resolvedEndpoint = defaultSyncEndpoint
 	}
 
-	payload := buildSyncPayload(device, daily, sessions, agents, allSessions)
-	if err := postSyncPayload(ctx, resolvedEndpoint, resolvedToken, payload); err != nil {
-		return err
-	}
-	if err := store.MarkSessionsSynced(ctx, sessions); err != nil {
-		return err
+	// Upload in batches that fit the server's per-request limits, marking each
+	// batch synced as soon as it lands so a later failure only retries the rest.
+	batches := planSyncBatches(daily, sessions, agents)
+	dailyUploaded, sessionsUploaded := 0, 0
+	for index, batch := range batches {
+		payload := buildSyncPayload(device, batch.daily, batch.sessions, batch.agents, allSessions)
+		if err := postSyncPayload(ctx, resolvedEndpoint, resolvedToken, payload); err != nil {
+			return fmt.Errorf("sync batch %d/%d: %w", index+1, len(batches), err)
+		}
+		if err := store.MarkSessionsSynced(ctx, batch.sessions); err != nil {
+			return err
+		}
+		dailyUploaded += len(payload.Daily)
+		sessionsUploaded += len(payload.Sessions)
 	}
 
-	return writeSyncResult(stdout, *quiet, len(payload.Daily), len(payload.Sessions))
+	return writeSyncResult(stdout, *quiet, dailyUploaded, sessionsUploaded)
+}
+
+// Per-request caps, kept well under the limits enforced by
+// supabase/functions/sync-usage (5000 daily, 5000 sessions, 20000 agents).
+const (
+	syncMaxDailyPerRequest    = 2000
+	syncMaxSessionsPerRequest = 1000
+	syncMaxAgentsPerRequest   = 10000
+)
+
+type syncBatch struct {
+	daily    []state.DailyUsageRow
+	sessions []state.SessionRow
+	agents   []state.SessionAgentRow
+}
+
+// planSyncBatches splits pending rows into requests that fit the server's
+// per-request limits. A session always travels with all of its agents, because
+// the server deletes and re-inserts a session's agent rows whenever the session
+// is upserted. Daily rows are full-day totals, so they can be split freely.
+func planSyncBatches(daily []state.DailyUsageRow, sessions []state.SessionRow, agents []state.SessionAgentRow) []syncBatch {
+	agentsBySession := make(map[string][]state.SessionAgentRow, len(sessions))
+	for _, agent := range agents {
+		key := agent.Provider + "\x00" + agent.SessionHash
+		agentsBySession[key] = append(agentsBySession[key], agent)
+	}
+
+	var batches []syncBatch
+	var current syncBatch
+	for _, session := range sessions {
+		sessionAgents := agentsBySession[session.Provider+"\x00"+session.SessionHash]
+		full := len(current.sessions) >= syncMaxSessionsPerRequest ||
+			len(current.agents)+len(sessionAgents) > syncMaxAgentsPerRequest
+		if len(current.sessions) > 0 && full {
+			batches = append(batches, current)
+			current = syncBatch{}
+		}
+		current.sessions = append(current.sessions, session)
+		current.agents = append(current.agents, sessionAgents...)
+	}
+	if len(current.sessions) > 0 {
+		batches = append(batches, current)
+	}
+
+	for index := 0; index*syncMaxDailyPerRequest < len(daily); index++ {
+		end := min((index+1)*syncMaxDailyPerRequest, len(daily))
+		if index >= len(batches) {
+			batches = append(batches, syncBatch{})
+		}
+		batches[index].daily = daily[index*syncMaxDailyPerRequest : end]
+	}
+	return batches
 }
 
 func writeSyncResult(stdout io.Writer, quiet bool, dailyUploaded int, sessionsUploaded int) error {
